@@ -1,0 +1,2932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="We're building something you can walk into. Generate a DOGE tip QR for your stream, contribute to the Destination fund, and sign the founding guest book.">
+<meta property="og:type"        content="website">
+<meta property="og:url"         content="https://dogefundme.com/">
+<meta property="og:title"       content="DogeFundMe — Tip · Build · Believe">
+<meta property="og:description" content="We're building something you can walk into.">
+<meta property="og:image"       content="https://dogefundme.com/logo.png">
+<meta name="twitter:card"        content="summary_large_image">
+<meta name="twitter:site"        content="@dogefundme">
+<meta name="twitter:title"       content="DogeFundMe — Tip · Build · Believe">
+<meta name="twitter:description" content="We're building something you can walk into.">
+<meta name="twitter:image"       content="https://dogefundme.com/logo.png">
+<link rel="canonical" href="https://dogefundme.com/">
+<title>DogeFundMe — Tip · Build · Believe</title>
+<!--
+// ============================================================
+// Author: Vincent Gonzalez | © 2026 Zengine™ | www.zengine.site
+// Project: DogeFundMe
+// File: dogefundme_qr_v1.3.0.html
+// Version: 1.3.0
+// ------------------------------------------------------------
+// CHANGE LOG v1.3.0
+//   - ADDED: og/Twitter meta tags — "We're building something you can walk into."
+//   - ADDED: title attr on "Open in wallet app" for desktop UX
+//   - ADDED: Live fund balance from Dogechain API (replaces 0 Ð)
+//   - ADDED: Guest book signature count wired to Founders CTA social proof
+//   - ADDED: CountAPI localStorage fallback + exponential backoff
+//   - ADDED: 18+ disclaimer in footer
+//   - REMOVED: dead functions — onTipNameInput, onTipWalletInput (no-op stubs)
+//   - REMOVED: shareTipLink (vestigial — replaced by updateOpenWalletLink)
+//   - REMOVED: downloadTipQR, copyTipEmbed (HTML already stripped in v1.0.4)
+//   - FIXED: iot-stat-fund now live from Dogechain; removed if API unavailable
+// ------------------------------------------------------------
+// WORKFLOW STACK:
+//   1. User enters DOGE wallet + optional label
+//   2. Config block resolves size + colors
+//   3. qrcode.js renders QR to off-screen canvas
+//   4. compositeShiba() composites logo PNG (or Ð fallback)
+//   5. Download / Embed / OBS copy
+//   6. Such Tip section: pre-wired wallet, live QR, copy/share
+// ------------------------------------------------------------
+// ASSET MANIFEST:
+//   - qrcode.min.js (cdnjs)
+//   - ./logo.png — place in same folder (house + Ð logo)
+//   - All fonts: Google Fonts (Syne + Space Mono)
+// ------------------------------------------------------------
+// BOOT ORDER:
+//   DOMContentLoaded → preloadLogo() → initWheel() → renderTipQR()
+// ============================================================
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<style>
+/* ============================================================
+   DESIGN SYSTEM — NAVY PREMIUM GLASSMORPHISM
+   ============================================================ */
+:root {
+  /* Background scale */
+  --navy-900: #04091a;
+  --navy-800: #070e28;
+  --navy-700: #0b1535;
+  --navy-600: #0f1f3d;
+  --navy-500: #162847;
+  --navy-400: #1e3560;
+  --navy-300: #2a4878;
+  --navy-200: #3d6094;
+
+  /* Gold scale */
+  --gold-bright: #f0c060;
+  --gold:        #c9963a;
+  --gold-dim:    #8a6020;
+  --gold-glow:   rgba(201,150,58,0.15);
+  --gold-glass:  rgba(201,150,58,0.08);
+
+  /* Text */
+  --cream:    #f0e8d0;
+  --cream-dim:#b8a888;
+  --blue-mute:#5a7898;
+  --blue-hint:#3a5068;
+
+  /* Glass surfaces */
+  --glass-bg:     rgba(15,31,61,0.55);
+  --glass-bg-hi:  rgba(22,40,71,0.7);
+  --glass-border: rgba(201,150,58,0.18);
+  --glass-border-hi: rgba(201,150,58,0.35);
+  --glass-blur:   blur(18px);
+
+  /* Functional */
+  --success: #3db870;
+  --danger:  #e05c3a;
+
+  /* Type */
+  --font-head: 'Syne', sans-serif;
+  --font-mono: 'Space Mono', monospace;
+
+  /* Radii */
+  --r-sm:  8px;
+  --r-md:  14px;
+  --r-lg:  20px;
+  --r-xl:  28px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+/* ============================================================
+   BACKGROUND — deep navy, layered orbs, noise grain
+   ============================================================ */
+body {
+  background: var(--navy-900);
+  color: var(--cream);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Gradient orbs */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 15% 10%,  rgba(30,53,96,0.7)   0%, transparent 60%),
+    radial-gradient(ellipse 50% 60% at 85% 80%,  rgba(15,31,61,0.8)   0%, transparent 60%),
+    radial-gradient(ellipse 40% 40% at 50% 50%,  rgba(201,150,58,0.03) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Subtle grid */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(201,150,58,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(201,150,58,0.03) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ============================================================
+   GLASS CARD MIXIN — applied to .glass
+   ============================================================ */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+}
+
+.glass-hi {
+  background: var(--glass-bg-hi);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border-hi);
+  border-radius: var(--r-lg);
+}
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+.page-wrap {
+  position: relative;
+  z-index: 1;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 24px 100px;
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28px 0 32px;
+  border-bottom: 1px solid var(--glass-border);
+  margin-bottom: 56px;
+}
+
+.logo-mark {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.logo-coin {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, var(--gold), var(--gold-bright));
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Georgia, serif;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--navy-900);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 3px var(--gold-glass), 0 4px 20px rgba(201,150,58,0.3);
+}
+
+.logo-text { display: flex; flex-direction: column; gap: 2px; }
+
+.logo-main {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 21px;
+  color: var(--gold-bright);
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+
+.logo-sub {
+  font-size: 10px;
+  color: var(--blue-mute);
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+}
+
+.version-tag {
+  font-size: 10px;
+  color: var(--blue-mute);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  padding: 5px 12px;
+  border-radius: 20px;
+  letter-spacing: 1px;
+  backdrop-filter: var(--glass-blur);
+}
+
+/* ============================================================
+   HERO
+   ============================================================ */
+.hero { margin-bottom: 60px; }
+
+.hero-eyebrow {
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 16px;
+}
+
+.hero-title {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: clamp(30px, 5.5vw, 52px);
+  line-height: 1.05;
+  letter-spacing: -1.5px;
+  color: var(--cream);
+  margin-bottom: 20px;
+}
+
+.hero-title span { color: var(--gold-bright); }
+
+.hero-sub {
+  font-size: 15px;
+  color: var(--cream-dim);
+  line-height: 1.75;
+  max-width: 580px;
+}
+
+.hero-sub strong { color: var(--cream); font-weight: 700; }
+
+.hero-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.hero-pill {
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--glass-border-hi);
+  background: var(--glass-bg);
+  color: var(--gold);
+  backdrop-filter: var(--glass-blur);
+}
+
+/* ============================================================
+   MAIN GRID — QR generator
+   ============================================================ */
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 28px;
+  align-items: start;
+}
+
+@media (max-width: 740px) {
+  .main-grid { grid-template-columns: 1fr; }
+  .preview-col { order: -1; }
+}
+
+/* ============================================================
+   GLASS PANELS — form column
+   ============================================================ */
+.panel {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  padding: 28px;
+}
+
+.panel + .panel { margin-top: 18px; }
+
+.panel-label {
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--blue-mute);
+  margin-bottom: 22px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.panel-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--glass-border);
+}
+
+/* ============================================================
+   FORM ELEMENTS
+   ============================================================ */
+.field { margin-bottom: 20px; }
+.field:last-child { margin-bottom: 0; }
+
+.field-label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--blue-mute);
+  margin-bottom: 8px;
+}
+
+.field input[type="text"] {
+  width: 100%;
+  background: rgba(4,9,26,0.6);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm);
+  padding: 13px 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--cream);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.field input[type="text"]:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-glass);
+}
+
+.field input[type="text"]::placeholder { color: var(--blue-hint); }
+
+.field-hint {
+  font-size: 11px;
+  color: var(--blue-mute);
+  margin-top: 7px;
+  line-height: 1.6;
+}
+
+.wallet-wrap { position: relative; }
+.wallet-status {
+  position: absolute;
+  right: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 15px;
+}
+
+/* ============================================================
+   SIZE PICKER
+   ============================================================ */
+.size-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.size-btn {
+  background: rgba(4,9,26,0.5);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm);
+  padding: 14px 8px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.18s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  color: var(--blue-mute);
+}
+
+.size-btn:hover { border-color: var(--gold); color: var(--cream-dim); }
+.size-btn.active {
+  border-color: var(--gold);
+  background: var(--gold-glass);
+  color: var(--gold-bright);
+  box-shadow: 0 0 16px var(--gold-glass);
+}
+
+.size-icon { display: flex; align-items: center; justify-content: center; }
+.size-icon .sq { background: currentColor; border-radius: 2px; opacity: 0.8; }
+.size-icon .sq-sm { width: 18px; height: 18px; }
+.size-icon .sq-md { width: 26px; height: 26px; }
+.size-icon .sq-lg { width: 34px; height: 34px; }
+.size-name { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+.size-px { font-size: 10px; color: var(--blue-hint); }
+
+/* ============================================================
+   COLOUR WHEEL
+   ============================================================ */
+.color-wheel-wrap {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.wheel-canvas-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 120px;
+  height: 120px;
+  cursor: crosshair;
+}
+
+#wheel-canvas { border-radius: 50%; display: block; }
+
+.wheel-cursor {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.6);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  top: 50%;
+  left: 50%;
+  transition: top 0.05s, left 0.05s;
+}
+
+.wheel-controls {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wheel-row { display: flex; flex-direction: column; gap: 7px; }
+
+.wheel-row-label {
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--blue-mute);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wheel-hex {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--gold);
+  letter-spacing: 1px;
+}
+
+.slider-track {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.slider-thumb {
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--cream);
+  border: 2px solid var(--navy-800);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.5);
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  transition: left 0.05s;
+}
+
+.wheel-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.color-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  border: 1px solid var(--glass-border);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.color-swatch:hover { transform: scale(1.1); box-shadow: 0 0 10px var(--gold-glass); }
+
+.swap-btn {
+  font-size: 16px;
+  background: rgba(4,9,26,0.5);
+  border: 1px solid var(--glass-border);
+  color: var(--blue-mute);
+  border-radius: 7px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.swap-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+.swatch-label {
+  font-size: 10px;
+  color: var(--blue-mute);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* ============================================================
+   PREVIEW COLUMN
+   ============================================================ */
+.preview-col { position: sticky; top: 24px; }
+
+.preview-panel {
+  background: var(--glass-bg-hi);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border-hi);
+  border-radius: var(--r-xl);
+  padding: 32px;
+  text-align: center;
+}
+
+.preview-label {
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--blue-mute);
+  margin-bottom: 26px;
+}
+
+.canvas-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 280px;
+  margin-bottom: 26px;
+}
+
+#qr-canvas {
+  border-radius: 10px;
+  image-rendering: pixelated;
+  max-width: 100%;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+}
+
+.canvas-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  color: var(--blue-hint);
+  font-size: 13px;
+}
+
+.placeholder-icon {
+  width: 72px;
+  height: 72px;
+  border: 1px dashed var(--glass-border);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  background: rgba(4,9,26,0.4);
+}
+
+/* ============================================================
+   ACTION BUTTONS
+   ============================================================ */
+.action-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.btn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 13px 16px;
+  border-radius: var(--r-sm);
+  border: none;
+  cursor: pointer;
+  transition: all 0.18s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--gold), var(--gold-bright));
+  color: var(--navy-900);
+  font-weight: 700;
+  box-shadow: 0 4px 16px rgba(201,150,58,0.3);
+}
+
+.btn-primary:hover { box-shadow: 0 6px 24px rgba(201,150,58,0.45); transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(0); }
+.btn-primary:disabled { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.btn-secondary {
+  background: rgba(4,9,26,0.6);
+  color: var(--cream-dim);
+  border: 1px solid var(--glass-border);
+}
+
+.btn-secondary:hover { border-color: var(--gold); color: var(--gold); }
+.btn-secondary:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.btn-full {
+  width: 100%;
+  background: rgba(4,9,26,0.5);
+  border: 1px solid var(--glass-border);
+  color: var(--blue-mute);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 12px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: all 0.18s;
+}
+
+.btn-full:hover { border-color: var(--gold); color: var(--gold); }
+.btn-full:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ============================================================
+   EMBED CODE BOX
+   ============================================================ */
+.embed-box {
+  display: none;
+  background: rgba(4,9,26,0.8);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm);
+  padding: 14px;
+  margin-top: 12px;
+  text-align: left;
+}
+
+.embed-box.visible { display: block; }
+
+.embed-code {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--gold);
+  word-break: break-all;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.embed-close {
+  font-size: 10px;
+  color: var(--blue-mute);
+  cursor: pointer;
+  text-align: right;
+  margin-top: 8px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.embed-close:hover { color: var(--danger); }
+
+/* ============================================================
+   SECTION DIVIDER
+   ============================================================ */
+.section-divider {
+  margin: 80px 0 0;
+  padding-top: 72px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.section-eyebrow {
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 0;
+}
+
+/* ============================================================
+   SUCH TIP SECTION
+   ============================================================ */
+.such-tip-grid {
+  display: flex;
+  justify-content: center;
+  margin-top: 32px;
+}
+
+.tip-card {
+  background: linear-gradient(160deg, rgba(15,31,61,0.9) 0%, rgba(7,14,40,0.95) 100%);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border-hi);
+  border-radius: var(--r-xl);
+  padding: 40px 36px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(201,150,58,0.12);
+}
+
+.tip-card::before {
+  content: '';
+  position: absolute;
+  top: -60px; right: -60px;
+  width: 200px; height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(201,150,58,0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.tip-card::after {
+  content: '';
+  position: absolute;
+  bottom: -40px; left: -40px;
+  width: 160px; height: 160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(30,53,96,0.3) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.tip-card-logo {
+  width: 84px;
+  height: 84px;
+  margin: 0 auto 22px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--navy-700);
+  border: 1px solid var(--glass-border-hi);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+
+.tip-logo-img { width: 100%; height: 100%; object-fit: contain; }
+
+.tip-logo-fallback {
+  font-family: Georgia, serif;
+  font-weight: 700;
+  font-size: 38px;
+  color: var(--gold);
+}
+
+.tip-wallet-display {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(4,9,26,0.7);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  padding: 13px 16px;
+  margin-bottom: 24px;
+}
+
+.tip-wallet-text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cream-dim);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+  text-align: left;
+}
+
+.tip-copy-btn {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  background: var(--gold-glass);
+  border: 1px solid var(--glass-border-hi);
+  color: var(--gold-bright);
+  padding: 7px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.18s;
+}
+
+.tip-copy-btn:hover {
+  background: rgba(201,150,58,0.22);
+  box-shadow: 0 0 12px var(--gold-glass);
+}
+
+/* Open in wallet button */
+.tip-open-wallet {
+  display: block;
+  width: 100%;
+  text-decoration: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  text-align: center;
+  background: linear-gradient(135deg, var(--gold), var(--gold-bright));
+  color: var(--navy-900);
+  font-weight: 700;
+  padding: 13px;
+  border-radius: 10px;
+  margin-bottom: 24px;
+  transition: all 0.18s;
+  box-shadow: 0 4px 16px rgba(201,150,58,0.25);
+  cursor: pointer;
+  border: none;
+}
+
+.tip-open-wallet:hover {
+  box-shadow: 0 6px 24px rgba(201,150,58,0.4);
+  transform: translateY(-1px);
+}
+
+.tip-amounts { margin-bottom: 16px; text-align: left; }
+
+.tip-amounts-label {
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--blue-mute);
+  margin-bottom: 10px;
+}
+
+.tip-amounts-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.tip-amt {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(4,9,26,0.6);
+  border: 1px solid var(--glass-border);
+  color: var(--blue-mute);
+  padding: 11px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+
+.tip-amt:hover { border-color: var(--gold); color: var(--gold-bright); }
+.tip-amt.active {
+  background: var(--gold-glass);
+  border-color: var(--gold);
+  color: var(--gold-bright);
+  box-shadow: 0 0 12px var(--gold-glass);
+}
+
+.tip-custom-row { margin-bottom: 24px; text-align: left; }
+
+.tip-custom-wrap {
+  display: flex;
+  align-items: center;
+  background: rgba(4,9,26,0.6);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+
+.tip-custom-wrap:focus-within {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-glass);
+}
+
+.tip-custom-sym {
+  font-family: Georgia, serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--gold);
+  padding: 0 14px;
+  flex-shrink: 0;
+}
+
+.tip-custom-wrap input[type="number"] {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--cream);
+  padding: 12px 12px 12px 0;
+}
+
+.tip-custom-wrap input[type="number"]::placeholder { color: var(--blue-hint); }
+.tip-custom-wrap input::-webkit-inner-spin-button,
+.tip-custom-wrap input::-webkit-outer-spin-button { -webkit-appearance: none; }
+.tip-custom-wrap input[type="number"] { -moz-appearance: textfield; }
+
+.tip-qr-wrap {
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+#tip-qr-canvas {
+  border-radius: 12px;
+  max-width: 200px;
+  width: 200px;
+  height: 200px;
+  display: block;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+.tip-stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding-top: 24px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.tip-stat { text-align: center; }
+
+.tip-stat-val {
+  font-family: var(--font-head);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--gold-bright);
+  line-height: 1;
+  margin-bottom: 5px;
+}
+
+.tip-stat-label {
+  font-size: 10px;
+  color: var(--blue-hint);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* ============================================================
+   IOT — THE DESTINATION SECTION
+   ============================================================ */
+.iot-section { margin-top: 0; }
+
+.iot-hero {
+  margin-bottom: 52px;
+}
+
+.iot-title {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: clamp(36px, 6vw, 64px);
+  line-height: 1.0;
+  letter-spacing: -2px;
+  color: var(--cream);
+  margin-bottom: 20px;
+}
+
+.iot-title span { color: var(--gold-bright); }
+
+.iot-lead {
+  font-size: 17px;
+  color: var(--cream-dim);
+  line-height: 1.8;
+  max-width: 640px;
+  border-left: 2px solid var(--gold);
+  padding-left: 20px;
+}
+
+.iot-lead strong { color: var(--cream); font-weight: 700; }
+
+/* Phase roadmap */
+.iot-phases {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 52px;
+}
+
+@media (max-width: 740px) {
+  .iot-phases { grid-template-columns: repeat(2, 1fr); }
+}
+
+.phase-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  padding: 24px 20px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+
+.phase-card:hover {
+  border-color: var(--glass-border-hi);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+.phase-card.active-phase {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold-glass), 0 8px 32px rgba(201,150,58,0.15);
+}
+
+.phase-card.active-phase::before {
+  content: 'Active';
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--gold);
+  border: 1px solid var(--gold);
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+
+.phase-num {
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+  margin-bottom: 10px;
+}
+
+.phase-name {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--cream);
+  margin-bottom: 10px;
+  letter-spacing: -0.3px;
+}
+
+.phase-target {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--gold-bright);
+  font-family: var(--font-head);
+  margin-bottom: 10px;
+}
+
+.phase-desc {
+  font-size: 11px;
+  color: var(--blue-mute);
+  line-height: 1.6;
+}
+
+/* Manifesto body */
+.iot-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 52px;
+}
+
+@media (max-width: 740px) { .iot-body { grid-template-columns: 1fr; } }
+
+.iot-block {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  padding: 28px;
+}
+
+.iot-block-head {
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 14px;
+}
+
+.iot-block-text {
+  font-size: 13px;
+  color: var(--cream-dim);
+  line-height: 1.8;
+}
+
+.iot-block-text strong { color: var(--cream); font-weight: 700; }
+
+/* Founders CTA */
+.founders-cta {
+  background: linear-gradient(135deg, rgba(15,31,61,0.9) 0%, rgba(22,40,71,0.95) 100%);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border-hi);
+  border-radius: var(--r-xl);
+  padding: 52px 48px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(201,150,58,0.1);
+}
+
+.founders-cta::before {
+  content: '';
+  position: absolute;
+  top: -80px; left: 50%;
+  transform: translateX(-50%);
+  width: 400px; height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(201,150,58,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.founders-eyebrow {
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+  margin-bottom: 16px;
+}
+
+.founders-title {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: clamp(26px, 4vw, 42px);
+  letter-spacing: -1px;
+  color: var(--cream);
+  margin-bottom: 16px;
+  line-height: 1.1;
+}
+
+.founders-title span { color: var(--gold-bright); }
+
+.founders-sub {
+  font-size: 14px;
+  color: var(--cream-dim);
+  line-height: 1.7;
+  max-width: 520px;
+  margin: 0 auto 32px;
+}
+
+.founders-wallet {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(4,9,26,0.7);
+  border: 1px solid var(--glass-border-hi);
+  border-radius: 12px;
+  padding: 14px 20px;
+  margin-bottom: 28px;
+}
+
+.founders-wallet-addr {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--cream-dim);
+  letter-spacing: 0.5px;
+}
+
+.founders-wallet-copy {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  background: var(--gold-glass);
+  border: 1px solid var(--glass-border-hi);
+  color: var(--gold-bright);
+  padding: 7px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+
+.founders-wallet-copy:hover { background: rgba(201,150,58,0.22); }
+
+.founders-stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.founders-stat-val {
+  font-family: var(--font-head);
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--gold-bright);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.founders-stat-label {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--blue-mute);
+}
+
+.founders-divider {
+  width: 1px;
+  height: 40px;
+  background: var(--glass-border);
+}
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+.toast {
+  position: fixed;
+  bottom: 36px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--glass-bg-hi);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border-hi);
+  color: var(--gold-bright);
+  padding: 13px 28px;
+  border-radius: 40px;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  z-index: 100;
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
+  opacity: 0;
+  white-space: nowrap;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+footer {
+  margin-top: 80px;
+  padding-top: 32px;
+  border-top: 1px solid var(--glass-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.footer-copy { font-size: 11px; color: var(--blue-hint); letter-spacing: 1px; }
+.footer-disclaimer { font-size: 10px; color: var(--blue-hint); letter-spacing: 0.5px; opacity: 0.7; text-align: center; flex-basis: 100%; order: 3; margin-top: 4px; }
+
+.footer-link {
+  font-size: 11px;
+  color: var(--blue-mute);
+  text-decoration: none;
+  letter-spacing: 1px;
+  transition: color 0.2s;
+}
+
+.footer-link:hover { color: var(--gold); }
+
+/* ============================================================
+   VISITOR COUNTER
+   ============================================================ */
+.counter-section {
+  margin-top: 72px;
+  display: flex;
+  justify-content: center;
+}
+
+.counter-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-xl);
+  padding: 40px 56px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  min-width: 320px;
+}
+
+.counter-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(201,150,58,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.counter-eyebrow {
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+  margin-bottom: 14px;
+}
+
+.counter-num {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 64px;
+  color: var(--gold-bright);
+  letter-spacing: -3px;
+  line-height: 1;
+  margin-bottom: 8px;
+  transition: opacity 0.3s;
+}
+
+.counter-label {
+  font-size: 11px;
+  color: var(--blue-mute);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.counter-bar {
+  margin-top: 20px;
+  height: 3px;
+  background: var(--glass-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.counter-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold-dim), var(--gold-bright));
+  border-radius: 2px;
+  transition: width 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+  width: 0%;
+}
+
+.counter-goal {
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--blue-hint);
+  letter-spacing: 1px;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* ============================================================
+   GUEST BOOK
+   ============================================================ */
+.guestbook-section {
+  margin-top: 72px;
+}
+
+.guestbook-inner {
+  background: linear-gradient(160deg, #0c1828 0%, #070e1e 100%);
+  border: 1px solid rgba(201,150,58,0.25);
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6), inset 0 1px 0 rgba(201,150,58,0.15);
+}
+
+/* Book header — marbled band */
+.guestbook-header {
+  background: linear-gradient(135deg, #0f1f3d 0%, #162847 40%, #0f1828 100%);
+  border-bottom: 1px solid rgba(201,150,58,0.3);
+  padding: 32px 40px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.guestbook-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 8px,
+      rgba(201,150,58,0.02) 8px,
+      rgba(201,150,58,0.02) 9px
+    );
+  pointer-events: none;
+}
+
+.guestbook-title-wrap { position: relative; }
+
+.guestbook-ornament {
+  font-size: 24px;
+  color: var(--gold);
+  line-height: 1;
+  margin-bottom: 6px;
+  letter-spacing: 8px;
+}
+
+.guestbook-title {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 26px;
+  color: var(--gold-bright);
+  letter-spacing: -0.5px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.guestbook-subtitle {
+  font-size: 11px;
+  color: var(--blue-mute);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.guestbook-count-badge {
+  background: var(--gold-glass);
+  border: 1px solid var(--glass-border-hi);
+  border-radius: 12px;
+  padding: 12px 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.guestbook-count-num {
+  font-family: var(--font-head);
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--gold-bright);
+  line-height: 1;
+}
+
+.guestbook-count-label {
+  font-size: 9px;
+  color: var(--blue-mute);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-top: 3px;
+}
+
+/* Signatures list */
+.guestbook-entries {
+  padding: 0 40px;
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(201,150,58,0.2) transparent;
+}
+
+.guestbook-entries::-webkit-scrollbar { width: 4px; }
+.guestbook-entries::-webkit-scrollbar-track { background: transparent; }
+.guestbook-entries::-webkit-scrollbar-thumb { background: rgba(201,150,58,0.2); border-radius: 2px; }
+
+.guestbook-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 0;
+  border-bottom: 1px solid rgba(201,150,58,0.07);
+}
+
+.guestbook-entry:last-child { border-bottom: none; }
+
+.entry-num {
+  font-size: 10px;
+  color: var(--gold-dim);
+  letter-spacing: 1px;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+  min-width: 28px;
+  margin-top: 2px;
+}
+
+.entry-body { flex: 1; }
+
+.entry-name {
+  font-family: var(--font-head);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--cream);
+  margin-bottom: 3px;
+  letter-spacing: -0.3px;
+}
+
+.entry-message {
+  font-size: 13px;
+  color: var(--cream-dim);
+  line-height: 1.6;
+  font-style: italic;
+}
+
+.entry-meta {
+  font-size: 10px;
+  color: var(--blue-hint);
+  letter-spacing: 1px;
+  margin-top: 4px;
+}
+
+.entry-wallet {
+  font-size: 10px;
+  color: var(--gold-dim);
+  font-family: var(--font-mono);
+  letter-spacing: 0.5px;
+}
+
+/* The form — parchment signing area */
+.guestbook-form-wrap {
+  padding: 28px 40px 36px;
+  border-top: 1px solid rgba(201,150,58,0.15);
+  background: rgba(4,9,26,0.3);
+  position: relative;
+}
+
+.guestbook-form-wrap::before {
+  content: '✦  Sign the Book  ✦';
+  display: block;
+  font-size: 11px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.gb-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 600px) { .gb-form-grid { grid-template-columns: 1fr; } }
+
+.gb-input {
+  width: 100%;
+  background: rgba(4,9,26,0.7);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm);
+  padding: 13px 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--cream);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.gb-input:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-glass);
+}
+
+.gb-input::placeholder { color: var(--blue-hint); }
+
+.gb-textarea {
+  width: 100%;
+  background: rgba(4,9,26,0.7);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm);
+  padding: 13px 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--cream);
+  outline: none;
+  resize: vertical;
+  min-height: 80px;
+  margin-bottom: 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  line-height: 1.6;
+}
+
+.gb-textarea:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-glass);
+}
+
+.gb-textarea::placeholder { color: var(--blue-hint); font-style: italic; }
+
+.gb-submit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.gb-hint {
+  font-size: 11px;
+  color: var(--blue-hint);
+  letter-spacing: 0.5px;
+  line-height: 1.5;
+}
+
+.btn-gb-submit {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, var(--gold), var(--gold-bright));
+  color: var(--navy-900);
+  font-weight: 700;
+  padding: 13px 28px;
+  border-radius: var(--r-sm);
+  border: none;
+  cursor: pointer;
+  transition: all 0.18s;
+  box-shadow: 0 4px 16px rgba(201,150,58,0.3);
+  flex-shrink: 0;
+}
+
+.btn-gb-submit:hover { box-shadow: 0 6px 24px rgba(201,150,58,0.45); transform: translateY(-1px); }
+.btn-gb-submit:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+.gb-view-all {
+  display: inline-block;
+  margin-top: 16px;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+  text-decoration: none;
+  text-align: center;
+  width: 100%;
+  transition: color 0.2s;
+}
+
+.gb-view-all:hover { color: var(--gold-bright); }
+
+/* ============================================================
+   END COUNTER + GUEST BOOK
+   ============================================================ */
+#qr-render-target {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  top: -9999px;
+  left: -9999px;
+}
+</style>
+</head>
+<body>
+
+<div id="qr-render-target"></div>
+<div class="toast" id="toast"></div>
+
+<div class="page-wrap">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo-mark">
+      <div class="logo-coin">Ð</div>
+      <div class="logo-text">
+        <div class="logo-main">DogeFundMe</div>
+        <div class="logo-sub">Tip · Build · Believe</div>
+      </div>
+    </div>
+    <div class="version-tag">v1.3.0</div>
+  </header>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-eyebrow">// utility across every platform — zero friction</div>
+    <h1 class="hero-title">One QR. Every platform.<br><span>Any device. Instant DOGE.</span></h1>
+    <p class="hero-sub">
+      Generate a branded tip QR in seconds. Drop it in <strong>OBS</strong>, your <strong>Twitch panel</strong>, <strong>YouTube description</strong>, a <strong>Kick overlay</strong>, or print it on a sign. Fans scan, their wallet opens, they send — direct to you. No account. No intermediary. No cut taken.
+      <br><br>
+      Every tip also nudges the meter on something bigger — a real-world destination funded by the same community that made a meme coin the most recognizable currency on the internet.
+    </p>
+    <div class="hero-pills">
+      <span class="hero-pill">Twitch</span>
+      <span class="hero-pill">YouTube</span>
+      <span class="hero-pill">Kick</span>
+      <span class="hero-pill">OBS Overlay</span>
+      <span class="hero-pill">X / Twitter</span>
+      <span class="hero-pill">IRL Events</span>
+    </div>
+  </div>
+
+  <!-- QR GENERATOR -->
+  <div class="main-grid">
+
+    <div class="form-col">
+
+      <div class="panel">
+        <div class="panel-label">01 — wallet</div>
+        <div class="field">
+          <label class="field-label" for="wallet-input">Your DOGE wallet address</label>
+          <div class="wallet-wrap">
+            <input type="text" id="wallet-input" placeholder="DQkwDpRYUyNNnoEZDfSGFFeQvLgbdEXiRd" maxlength="34" autocomplete="off" spellcheck="false"/>
+            <span class="wallet-status" id="wallet-status"></span>
+          </div>
+          <div class="field-hint">Starts with D, 26–34 chars. QR encodes <code>dogecoin:[address]</code> — opens any DOGE wallet app on scan.</div>
+        </div>
+        <div class="field">
+          <label class="field-label" for="label-input">Display label (optional)</label>
+          <input type="text" id="label-input" placeholder="e.g. xXDogeFanXx" maxlength="32"/>
+          <div class="field-hint">Printed below the QR in your download.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-label">02 — size</div>
+        <div class="size-grid">
+          <button class="size-btn" data-size="128" onclick="selectSize(this)">
+            <div class="size-icon"><div class="sq sq-sm"></div></div>
+            <div class="size-name">Small</div>
+            <div class="size-px">128 px</div>
+          </button>
+          <button class="size-btn active" data-size="256" onclick="selectSize(this)">
+            <div class="size-icon"><div class="sq sq-md"></div></div>
+            <div class="size-name">Medium</div>
+            <div class="size-px">256 px</div>
+          </button>
+          <button class="size-btn" data-size="512" onclick="selectSize(this)">
+            <div class="size-icon"><div class="sq sq-lg"></div></div>
+            <div class="size-name">Large</div>
+            <div class="size-px">512 px</div>
+          </button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-label">03 — colours</div>
+        <div class="color-wheel-wrap">
+          <div class="wheel-canvas-wrap" id="wheel-wrap">
+            <canvas id="wheel-canvas" width="120" height="120"></canvas>
+            <div class="wheel-cursor" id="wheel-cursor"></div>
+          </div>
+          <div class="wheel-controls">
+            <div class="wheel-row">
+              <div class="wheel-row-label"><span>Brightness</span></div>
+              <div class="slider-track" id="bright-track">
+                <div class="slider-thumb" id="bright-thumb"></div>
+              </div>
+            </div>
+            <div class="wheel-preview-row">
+              <div class="color-swatch" id="swatch-dark"  title="Dark modules"  onclick="activateSwatch('dark')"></div>
+              <button class="swap-btn" onclick="swapColors()" title="Swap">⇄</button>
+              <div class="color-swatch" id="swatch-light" title="Light modules" onclick="activateSwatch('light')"></div>
+              <span class="swatch-label" id="active-swatch-label">dark modules</span>
+            </div>
+            <div class="wheel-row">
+              <div class="wheel-row-label">Hex <span class="wheel-hex" id="wheel-hex-display">#0f1f3d</span></div>
+            </div>
+          </div>
+        </div>
+        <input type="color" id="color-dark"  value="#0f1f3d" style="display:none" oninput="onHiddenColorInput('dark',  this.value)">
+        <input type="color" id="color-light" value="#f0e8d0" style="display:none" oninput="onHiddenColorInput('light', this.value)">
+      </div>
+
+    </div><!-- /form-col -->
+
+    <div class="preview-col">
+      <div class="preview-panel">
+        <div class="preview-label">Live preview</div>
+        <div class="canvas-wrap" id="canvas-wrap">
+          <div class="canvas-placeholder" id="canvas-placeholder">
+            <div class="placeholder-icon">Ð</div>
+            <span>Enter your wallet<br>to generate</span>
+          </div>
+          <canvas id="qr-canvas" style="display:none;"></canvas>
+        </div>
+        <div class="action-row">
+          <button class="btn btn-primary"   id="btn-download" onclick="downloadQR()"   disabled>↓ PNG</button>
+          <button class="btn btn-secondary" id="btn-embed"    onclick="toggleEmbed()"  disabled>&lt;/&gt; Embed</button>
+        </div>
+        <button class="btn-full" id="btn-obs" onclick="copyOBS()" disabled>Copy OBS browser source</button>
+        <div class="embed-box" id="embed-box">
+          <div class="embed-code" id="embed-code"></div>
+          <div class="embed-close" onclick="toggleEmbed()">✕ close</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main-grid -->
+
+  <!-- SUCH TIP -->
+  <div class="section-divider" id="such-tip">
+    <div class="section-eyebrow">// such tip</div>
+    <div class="such-tip-grid">
+      <div class="tip-card">
+        <div class="tip-card-logo">
+          <img src="./logo.png" alt="DogeFundMe" class="tip-logo-img" onerror="this.style.display='none';document.getElementById('tip-logo-fallback').style.display='flex'">
+          <div class="tip-logo-fallback" id="tip-logo-fallback" style="display:none;">Ð</div>
+        </div>
+
+        <div class="tip-wallet-display">
+          <span class="tip-wallet-text" id="tip-wallet-text" data-full="DU64oNpbRNRCEZdRWN1STN2KWsj7W3Ar4U">DU64oNp…Ar4U</span>
+          <button class="tip-copy-btn" onclick="copyTipWallet()">Copy</button>
+        </div>
+
+        <a class="tip-open-wallet" id="tip-open-wallet" href="dogecoin:DU64oNpbRNRCEZdRWN1STN2KWsj7W3Ar4U?amount=10" title="Tap on mobile to open your DOGE wallet app" onclick="updateOpenWalletLink(event)">
+          Open in wallet app →
+        </a>
+
+        <div class="tip-amounts">
+          <div class="tip-amounts-label">Quick amounts</div>
+          <div class="tip-amounts-grid">
+            <button class="tip-amt active" data-amt="10"  onclick="selectTipAmt(this)">10 Ð</button>
+            <button class="tip-amt"        data-amt="50"  onclick="selectTipAmt(this)">50 Ð</button>
+            <button class="tip-amt"        data-amt="100" onclick="selectTipAmt(this)">100 Ð</button>
+            <button class="tip-amt"        data-amt="420" onclick="selectTipAmt(this)">420 Ð</button>
+          </div>
+        </div>
+
+        <div class="tip-custom-row">
+          <div class="tip-amounts-label" style="margin-bottom:8px">Custom amount (Ð)</div>
+          <div class="tip-custom-wrap">
+            <span class="tip-custom-sym">Ð</span>
+            <input type="number" id="tip-custom-amt" min="1" max="999999" placeholder="0" oninput="onCustomAmt(this)">
+          </div>
+        </div>
+
+        <div class="tip-qr-wrap">
+          <canvas id="tip-qr-canvas"></canvas>
+        </div>
+
+        <div class="tip-stats-row">
+          <div class="tip-stat">
+            <div class="tip-stat-val" id="tip-stat-copies">0</div>
+            <div class="tip-stat-label">address copies</div>
+          </div>
+          <div class="tip-stat">
+            <div class="tip-stat-val" id="tip-stat-shares">0</div>
+            <div class="tip-stat-label">link shares</div>
+          </div>
+          <div class="tip-stat">
+            <div class="tip-stat-val">Free</div>
+            <div class="tip-stat-label">forever</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- THE DESTINATION — IOT SECTION -->
+  <div class="section-divider iot-section" id="the-destination">
+    <div class="section-eyebrow">// the destination</div>
+
+    <div class="iot-hero">
+      <h2 class="iot-title">The internet built a<br><span>meme into a movement.</span><br>Now we build something<br><span>you can walk into.</span></h2>
+      <p class="iot-lead">
+        For years, DOGE has been the internet's inside joke — and the world's most recognizable community. It was never about technical perfection or institutional validation. It was about <strong>participation</strong>. About showing up. About the absurd possibility that enough people, acting together on a shared belief, can make something real out of nothing.
+        <br><br>
+        That's exactly how this works. The Destination is a community-funded, community-recognized physical landmark. Not a pitch deck. Not a whitepaper. <strong>A place.</strong>
+      </p>
+    </div>
+
+    <!-- Phase roadmap -->
+    <div class="iot-phases">
+      <div class="phase-card active-phase">
+        <div class="phase-num">Phase A</div>
+        <div class="phase-name">Proof of Demand</div>
+        <div class="phase-target">$0 → $250k</div>
+        <div class="phase-desc">Public wallet. Live balance. Transaction feed. Top contributors. Prove the internet wants this.</div>
+      </div>
+      <div class="phase-card">
+        <div class="phase-num">Phase B</div>
+        <div class="phase-name">Land + Legal</div>
+        <div class="phase-target">$250k → $1M</div>
+        <div class="phase-desc">Form a legal entity. Secure land — Nevada or Texas, community vote. Published cost breakdown.</div>
+      </div>
+      <div class="phase-card">
+        <div class="phase-num">Phase C</div>
+        <div class="phase-name">The First Build</div>
+        <div class="phase-target">$1M → $3M</div>
+        <div class="phase-desc">Boutique destination: 10–20 keys. Crypto-native. Founders Wall — wallets engraved permanently.</div>
+      </div>
+      <div class="phase-card">
+        <div class="phase-num">Phase D</div>
+        <div class="phase-name">Expansion</div>
+        <div class="phase-target">$3M+</div>
+        <div class="phase-desc">Add experiences — Family Fun Center, restaurant, live events. The joke becomes a landmark people fly in for.</div>
+      </div>
+    </div>
+
+    <!-- Body blocks -->
+    <div class="iot-body">
+      <div class="iot-block">
+        <div class="iot-block-head">// why this works</div>
+        <div class="iot-block-text">
+          Most projects fail because they demand belief before they provide evidence. This one does the opposite — it earns belief gradually, one transparent milestone at a time.<br><br>
+          At first, people contribute because it's amusing. Then they continue because it's progressing. Eventually, <strong>they defend it because they're part of it.</strong> That's how movements form — not through perfection, but through shared ownership of something improbable becoming real.
+        </div>
+      </div>
+      <div class="iot-block">
+        <div class="iot-block-head">// transparency as foundation</div>
+        <div class="iot-block-text">
+          Trust is not an accessory to this project. It is structural.<br><br>
+          <strong>Every Dogecoin received is publicly verifiable.</strong> Every phase is documented. Every decision is accountable. This is not a closed system — it's a glass-box experiment in collective creation.<br><br>
+          No anonymous wallets. No hidden fees. No promised ROI. Just a public goal and an open ledger.
+        </div>
+      </div>
+      <div class="iot-block">
+        <div class="iot-block-head">// the cultural moment</div>
+        <div class="iot-block-text">
+          There has never been a physical destination quite like this.<br><br>
+          Crowdfunded products exist. Meme-driven movements exist. Crypto-native platforms exist. But <strong>a real-world landmark — funded by a meme currency, driven by a global online community</strong> — remains unexplored territory.<br><br>
+          If successful, it doesn't just become a building. It becomes a case study.
+        </div>
+      </div>
+      <div class="iot-block">
+        <div class="iot-block-head">// every transaction is a brick</div>
+        <div class="iot-block-text">
+          The Destination is not financed by a handful of large investors. It is constructed through participation at every level.<br><br>
+          Small contributors who want to leave a <strong>permanent mark on a Founders Wall</strong>. Players who engage through games and daily competitions. Supporters who see the long-term cultural weight of what this becomes.<br><br>
+          You are not observing its growth. You are responsible for it.
+        </div>
+      </div>
+    </div>
+
+    <!-- Founders CTA -->
+    <div class="founders-cta">
+      <div class="founders-eyebrow">// be early</div>
+      <h3 class="founders-title">Your wallet address.<br><span>Engraved. Forever.</span></h3>
+      <p class="founders-sub">Every contributor to Phase A earns a permanent place on the Founders Wall — physically engraved at the destination. This is not symbolic. This is the ledger of people who were here before it was obvious. <span id="founders-social-proof" style="color:var(--gold-bright);"></span></p>
+      <div class="founders-wallet">
+        <span class="founders-wallet-addr" data-full="DU64oNpbRNRCEZdRWN1STN2KWsj7W3Ar4U">DU64oNp…Ar4U</span>
+        <button class="founders-wallet-copy" onclick="copyFoundersWallet()">Copy</button>
+      </div>
+      <div class="founders-stats">
+        <div class="tip-stat">
+          <div class="founders-stat-val" id="iot-stat-fund"><span style="font-size:14px;opacity:0.5">loading...</span></div>
+          <div class="founders-stat-label">raised so far</div>
+        </div>
+        <div class="founders-divider"></div>
+        <div class="tip-stat">
+          <div class="founders-stat-val">Phase A</div>
+          <div class="founders-stat-label">current phase</div>
+        </div>
+        <div class="founders-divider"></div>
+        <div class="tip-stat">
+          <div class="founders-stat-val">Public</div>
+          <div class="founders-stat-label">wallet ledger</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /iot-section -->
+
+  <!-- VISITOR COUNTER -->
+  <div class="counter-section">
+    <div class="counter-card">
+      <div class="counter-eyebrow">// souls who found this place</div>
+      <div class="counter-num" id="counter-num">420</div>
+      <div class="counter-label">visitors and counting</div>
+      <div class="counter-bar">
+        <div class="counter-bar-fill" id="counter-bar-fill"></div>
+      </div>
+      <div class="counter-goal">
+        <span>0</span>
+        <span id="counter-goal-label">goal: 10,000</span>
+        <span>10,000</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- GUEST BOOK -->
+  <div class="guestbook-section" id="guestbook">
+    <div class="guestbook-inner">
+
+      <div class="guestbook-header">
+        <div class="guestbook-title-wrap">
+          <div class="guestbook-ornament">✦ ✦ ✦</div>
+          <div class="guestbook-title">The Guest Book</div>
+          <div class="guestbook-subtitle">DogeFundMe — Est. 2026</div>
+        </div>
+        <div class="guestbook-count-badge">
+          <div class="guestbook-count-num" id="gb-count">—</div>
+          <div class="guestbook-count-label">signatures</div>
+        </div>
+      </div>
+
+      <div class="guestbook-entries" id="guestbook-entries">
+        <!-- Populated by JS / Web3Forms GET -->
+        <div class="guestbook-entry">
+          <div class="entry-num">#1</div>
+          <div class="entry-body">
+            <div class="entry-name">The Doge Himself</div>
+            <div class="entry-message">"Such hotel. Very real. Wow."</div>
+            <div class="entry-meta">March 2026 · Founder</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="guestbook-form-wrap">
+        <div class="gb-form-grid">
+          <input class="gb-input" id="gb-name"   type="text"  placeholder="Your name or alias" maxlength="48">
+          <input class="gb-input" id="gb-wallet" type="text"  placeholder="DOGE wallet (optional)" maxlength="34">
+        </div>
+        <textarea class="gb-textarea" id="gb-message" placeholder="Leave your mark. One entry per visitor — honor system." maxlength="280"></textarea>
+        <div class="gb-submit-row">
+          <div class="gb-hint">Your entry appears on the history page.<br>One signature per person, please.</div>
+          <button class="btn-gb-submit" id="gb-submit-btn" onclick="submitGuestBook()">Sign the Book</button>
+        </div>
+        <a href="./guestbook.html" class="gb-view-all" target="_blank" rel="noopener noreferrer">View all signatures →</a>
+      </div>
+
+    </div>
+  </div><!-- /guestbook -->
+
+</div><!-- /page-wrap -->
+
+<footer>
+  <div class="footer-copy">© 2026 Zengine™ — www.zengine.site</div>
+  <div class="footer-disclaimer">By using this site you confirm you are 18 or older and that cryptocurrency activity is legal in your jurisdiction.</div>
+  <a href="https://dogefundme.com" class="footer-link" target="_blank" rel="noopener noreferrer">dogefundme.com</a>
+</footer>
+
+<script>
+// ============================================================
+// CONFIG BLOCK
+// READS: DOM inputs
+// WRITES: STATE, canvas
+// ============================================================
+var STATE = {
+  wallet:    '',
+  label:     '',
+  size:      256,
+  darkColor: '#0f1f3d',
+  lightColor:'#f0e8d0',
+  valid:     false,
+  embedOpen: false
+};
+
+var DEV_MODE = false;
+
+var LOGO_IMG    = null;
+var LOGO_LOADED = false;
+
+function preloadLogo() {
+  LOGO_IMG = new Image();
+  LOGO_IMG.onload = function() {
+    LOGO_LOADED = true;
+    log('Logo loaded OK');
+    if (STATE.valid) renderQR();
+    renderTipQR();
+  };
+  LOGO_IMG.onerror = function() {
+    LOGO_LOADED = false;
+    console.error('Logo PNG failed — Ð fallback active. Place logo.png in same folder.');
+  };
+  LOGO_IMG.src = './logo.png';
+}
+
+function log() {
+  if (DEV_MODE) console.log.apply(console, arguments);
+}
+
+// ============================================================
+// WALLET VALIDATION
+// ============================================================
+function isValidDoge(address) {
+  if (typeof address !== 'string') return false;
+  return /^D[1-9A-HJ-NP-Za-km-z]{25,33}$/.test(address.trim());
+}
+
+// ============================================================
+// QR GENERATOR INPUT HANDLERS
+// ============================================================
+function onWalletInput() {
+  var el  = document.getElementById('wallet-input');
+  var val = el.value.trim();
+  STATE.wallet = val;
+  STATE.valid  = isValidDoge(val);
+  var s = document.getElementById('wallet-status');
+  if (!val.length) { s.textContent = ''; }
+  else if (STATE.valid) { s.textContent = '✓'; s.style.color = '#3db870'; }
+  else                  { s.textContent = '✗'; s.style.color = '#e05c3a'; }
+  renderQR();
+}
+
+function onLabelInput() {
+  STATE.label = document.getElementById('label-input').value;
+  renderQR();
+}
+
+function selectSize(btn) {
+  document.querySelectorAll('.size-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  STATE.size = parseInt(btn.getAttribute('data-size'), 10);
+  renderQR();
+}
+
+// ============================================================
+// COLOUR WHEEL ENGINE
+// ============================================================
+var WHEEL = {
+  activeSwatch: 'dark',
+  hue: 216, sat: 0.75, brightness: 0.24,
+  draggingWheel: false, draggingSlider: false
+};
+
+function initWheel() {
+  var canvas = document.getElementById('wheel-canvas');
+  drawWheel(canvas.getContext('2d'), 60);
+  // Set cursor to navy start position
+  var r = 60;
+  var angle = WHEEL.hue * Math.PI / 180;
+  var dist  = WHEEL.sat * r;
+  var cursor = document.getElementById('wheel-cursor');
+  cursor.style.left = (((r + dist * Math.cos(angle)) / 120) * 100) + '%';
+  cursor.style.top  = (((r + dist * Math.sin(angle)) / 120) * 100) + '%';
+  updateBrightSlider(WHEEL.brightness);
+  syncSwatchUI();
+
+  canvas.addEventListener('mousedown',  function(e) { WHEEL.draggingWheel = true;  pickFromWheel(e); });
+  canvas.addEventListener('mousemove',  function(e) { if (WHEEL.draggingWheel) pickFromWheel(e); });
+  canvas.addEventListener('mouseup',    function()  { WHEEL.draggingWheel = false; });
+  canvas.addEventListener('mouseleave', function()  { WHEEL.draggingWheel = false; });
+  canvas.addEventListener('touchstart', function(e) { e.preventDefault(); WHEEL.draggingWheel = true;  pickFromWheelTouch(e); }, { passive: false });
+  canvas.addEventListener('touchmove',  function(e) { e.preventDefault(); if (WHEEL.draggingWheel) pickFromWheelTouch(e); }, { passive: false });
+  canvas.addEventListener('touchend',   function()  { WHEEL.draggingWheel = false; });
+
+  var track = document.getElementById('bright-track');
+  track.addEventListener('mousedown', function(e) { WHEEL.draggingSlider = true; pickFromSlider(e); });
+  document.addEventListener('mousemove', function(e) { if (WHEEL.draggingSlider) pickFromSlider(e); });
+  document.addEventListener('mouseup',   function()  { WHEEL.draggingSlider = false; });
+  track.addEventListener('touchstart', function(e) { e.preventDefault(); WHEEL.draggingSlider = true; pickFromSliderTouch(e); }, { passive: false });
+  document.addEventListener('touchmove', function(e) { if (WHEEL.draggingSlider) pickFromSliderTouch(e); }, { passive: false });
+  document.addEventListener('touchend',  function()  { WHEEL.draggingSlider = false; });
+}
+
+function drawWheel(ctx, r) {
+  var size  = r * 2;
+  var image = ctx.createImageData(size, size);
+  var data  = image.data;
+  for (var y = 0; y < size; y++) {
+    for (var x = 0; x < size; x++) {
+      var dx = x - r, dy = y - r;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > r) { data[(y * size + x) * 4 + 3] = 0; continue; }
+      var hue = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+      var rgb = hsvToRgb(hue, dist / r, 1);
+      var i = (y * size + x) * 4;
+      data[i] = rgb[0]; data[i+1] = rgb[1]; data[i+2] = rgb[2]; data[i+3] = 255;
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+}
+
+function pickFromWheel(e) {
+  var canvas = document.getElementById('wheel-canvas');
+  var rect = canvas.getBoundingClientRect();
+  applyWheelPick((e.clientX - rect.left) * (canvas.width / rect.width),
+                 (e.clientY - rect.top)  * (canvas.height / rect.height),
+                 canvas.width / 2);
+}
+
+function pickFromWheelTouch(e) {
+  var canvas = document.getElementById('wheel-canvas');
+  var rect = canvas.getBoundingClientRect();
+  var t = e.touches[0];
+  applyWheelPick((t.clientX - rect.left) * (canvas.width / rect.width),
+                 (t.clientY - rect.top)  * (canvas.height / rect.height),
+                 canvas.width / 2);
+}
+
+function applyWheelPick(x, y, r) {
+  var dx = x - r, dy = y - r;
+  var dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist > r) {
+    var a = Math.atan2(dy, dx);
+    x = r + Math.cos(a) * (r - 1);
+    y = r + Math.sin(a) * (r - 1);
+    dx = x - r; dy = y - r; dist = r - 1;
+  }
+  WHEEL.hue = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+  WHEEL.sat = dist / r;
+  var cursor = document.getElementById('wheel-cursor');
+  cursor.style.left = ((x / (r * 2)) * 100) + '%';
+  cursor.style.top  = ((y / (r * 2)) * 100) + '%';
+  commitColor();
+}
+
+function pickFromSlider(e) {
+  var track = document.getElementById('bright-track');
+  var rect  = track.getBoundingClientRect();
+  WHEEL.brightness = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  updateBrightSlider(WHEEL.brightness);
+  commitColor();
+}
+
+function pickFromSliderTouch(e) {
+  var track = document.getElementById('bright-track');
+  var rect  = track.getBoundingClientRect();
+  var t = e.touches[0];
+  WHEEL.brightness = Math.max(0, Math.min(1, (t.clientX - rect.left) / rect.width));
+  updateBrightSlider(WHEEL.brightness);
+  commitColor();
+}
+
+function updateBrightSlider(t) {
+  WHEEL.brightness = t;
+  var thumb = document.getElementById('bright-thumb');
+  var track = document.getElementById('bright-track');
+  var rgb = hsvToRgb(WHEEL.hue, WHEEL.sat, 1);
+  track.style.background = 'linear-gradient(to right, #000, rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + '))';
+  thumb.style.left = (t * 100) + '%';
+}
+
+function commitColor() {
+  var rgb = hsvToRgb(WHEEL.hue, WHEEL.sat, WHEEL.brightness);
+  var hex = rgbToHex(rgb[0], rgb[1], rgb[2]);
+  if (WHEEL.activeSwatch === 'dark') {
+    STATE.darkColor = hex;
+    document.getElementById('color-dark').value = hex;
+  } else {
+    STATE.lightColor = hex;
+    document.getElementById('color-light').value = hex;
+  }
+  updateBrightSlider(WHEEL.brightness);
+  syncSwatchUI();
+  renderQR();
+}
+
+function syncSwatchUI() {
+  document.getElementById('swatch-dark').style.background  = STATE.darkColor;
+  document.getElementById('swatch-light').style.background = STATE.lightColor;
+  var hex = WHEEL.activeSwatch === 'dark' ? STATE.darkColor : STATE.lightColor;
+  document.getElementById('wheel-hex-display').textContent = hex;
+  document.getElementById('active-swatch-label').textContent = WHEEL.activeSwatch === 'dark' ? 'dark modules' : 'light modules';
+}
+
+function activateSwatch(which) {
+  WHEEL.activeSwatch = which;
+  var hex = which === 'dark' ? STATE.darkColor : STATE.lightColor;
+  var rgb = hexToRgb(hex);
+  var hsv = rgbToHsv(rgb[0], rgb[1], rgb[2]);
+  WHEEL.hue = hsv[0]; WHEEL.sat = hsv[1]; WHEEL.brightness = hsv[2];
+  var r = 60, angle = WHEEL.hue * Math.PI / 180, dist = WHEEL.sat * r;
+  var cursor = document.getElementById('wheel-cursor');
+  cursor.style.left = (((r + dist * Math.cos(angle)) / 120) * 100) + '%';
+  cursor.style.top  = (((r + dist * Math.sin(angle)) / 120) * 100) + '%';
+  updateBrightSlider(WHEEL.brightness);
+  syncSwatchUI();
+}
+
+function swapColors() {
+  var tmp = STATE.darkColor;
+  STATE.darkColor  = STATE.lightColor;
+  STATE.lightColor = tmp;
+  document.getElementById('color-dark').value  = STATE.darkColor;
+  document.getElementById('color-light').value = STATE.lightColor;
+  syncSwatchUI();
+  renderQR();
+}
+
+function onHiddenColorInput(which, val) {
+  if (which === 'dark') STATE.darkColor = val;
+  else STATE.lightColor = val;
+  syncSwatchUI();
+  renderQR();
+}
+
+// ============================================================
+// QR RENDERING PIPELINE
+// ============================================================
+function renderQR() {
+  if (!STATE.valid) { showPlaceholder(); setActionsEnabled(false); return; }
+  var uri = 'dogecoin:' + STATE.wallet;
+  var qrSize = STATE.size;
+  var target = document.getElementById('qr-render-target');
+  target.innerHTML = '';
+  try {
+    new QRCode(target, {
+      text: uri, width: qrSize, height: qrSize,
+      colorDark: STATE.darkColor, colorLight: STATE.lightColor,
+      correctLevel: QRCode.CorrectLevel.H
+    });
+  } catch(e) { console.error('QR gen failed:', e); showPlaceholder(); return; }
+
+  setTimeout(function() {
+    var qrImg = target.querySelector('img') || target.querySelector('canvas');
+    if (!qrImg) { showPlaceholder(); return; }
+    var dc  = document.getElementById('qr-canvas');
+    var ctx = dc.getContext('2d');
+    var lh  = STATE.label ? Math.round(qrSize * 0.1) + 16 : 0;
+    dc.width  = qrSize;
+    dc.height = qrSize + lh;
+    dc.style.width  = Math.min(qrSize, 280) + 'px';
+    dc.style.height = Math.round(Math.min(qrSize, 280) * ((qrSize + lh) / qrSize)) + 'px';
+
+    function finish() {
+      compositeLogoOverlay(ctx, qrSize);
+      drawLabel(ctx, qrSize, lh);
+      showCanvas();
+      setActionsEnabled(true);
+    }
+
+    if (qrImg.tagName === 'CANVAS') { ctx.drawImage(qrImg, 0, 0, qrSize, qrSize); finish(); }
+    else if (qrImg.complete)        { ctx.drawImage(qrImg, 0, 0, qrSize, qrSize); finish(); }
+    else { qrImg.onload = function() { ctx.drawImage(qrImg, 0, 0, qrSize, qrSize); finish(); }; return; }
+  }, 120);
+}
+
+// ============================================================
+// LOGO OVERLAY — shared by generator + such tip
+// ============================================================
+function compositeLogoOverlay(ctx, qrSize) {
+  var size = Math.round(qrSize * 0.24);
+  var cx   = Math.round(qrSize / 2);
+  var cy   = Math.round(qrSize / 2);
+  var r    = Math.round(size / 2);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r + 2, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  if (LOGO_LOADED && LOGO_IMG) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(LOGO_IMG, cx - r, cy - r, size, size);
+  } else {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#0f1f3d';
+    ctx.fill();
+    ctx.font = '700 ' + Math.round(size * 0.68) + 'px Georgia, serif';
+    ctx.fillStyle = '#c9963a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('\u00D0', cx, cy);
+  }
+  ctx.restore();
+}
+
+// DECISION: alias so legacy call sites still work
+function compositeShiba(ctx, qrSize) { compositeLogoOverlay(ctx, qrSize); }
+
+function drawLabel(ctx, qrSize, labelHeight) {
+  if (!STATE.label || labelHeight === 0) return;
+  ctx.save();
+  ctx.fillStyle = STATE.darkColor;
+  ctx.font = '700 ' + Math.round(qrSize * 0.05) + 'px Space Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(STATE.label, Math.round(qrSize / 2), qrSize + Math.round(labelHeight / 2));
+  ctx.restore();
+}
+
+function showPlaceholder() {
+  document.getElementById('canvas-placeholder').style.display = 'flex';
+  document.getElementById('qr-canvas').style.display = 'none';
+  document.getElementById('embed-box').classList.remove('visible');
+  STATE.embedOpen = false;
+}
+
+function showCanvas() {
+  document.getElementById('canvas-placeholder').style.display = 'none';
+  document.getElementById('qr-canvas').style.display = 'block';
+}
+
+function setActionsEnabled(on) {
+  document.getElementById('btn-download').disabled = !on;
+  document.getElementById('btn-embed').disabled    = !on;
+  document.getElementById('btn-obs').disabled      = !on;
+}
+
+// ============================================================
+// DOWNLOAD / EMBED / OBS
+// ============================================================
+function downloadQR() {
+  var canvas = document.getElementById('qr-canvas');
+  if (!canvas || canvas.style.display === 'none') return;
+  try {
+    var link = document.createElement('a');
+    var fn = 'doge-tip-qr' + (STATE.label ? '-' + STATE.label.replace(/[^a-z0-9]/gi, '-').toLowerCase() : '') + '-' + STATE.size + 'px.png';
+    link.download = fn;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    showToast('PNG downloaded');
+  } catch(e) { console.error('Download failed:', e); }
+}
+
+function toggleEmbed() {
+  var box  = document.getElementById('embed-box');
+  var code = document.getElementById('embed-code');
+  if (STATE.embedOpen) { box.classList.remove('visible'); STATE.embedOpen = false; return; }
+  var canvas = document.getElementById('qr-canvas');
+  if (!canvas || canvas.style.display === 'none') return;
+  var alt  = STATE.label ? STATE.label + ' DOGE tip QR' : 'DOGE tip QR';
+  code.textContent = '<img src="' + canvas.toDataURL('image/png') + '" alt="' + alt + '" width="' + Math.min(STATE.size, 256) + '" style="image-rendering:pixelated;">';
+  box.classList.add('visible');
+  STATE.embedOpen = true;
+}
+
+function copyOBS() {
+  var canvas = document.getElementById('qr-canvas');
+  if (!canvas || canvas.style.display === 'none') return;
+  var code = '<img src="' + canvas.toDataURL('image/png') + '" width="' + STATE.size + '" height="' + STATE.size + '">';
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(code).then(function() { showToast('OBS code copied'); }).catch(function() { fallbackCopy(code); });
+  } else { fallbackCopy(code); }
+}
+
+function fallbackCopy(text) {
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.top = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); showToast('Copied'); }
+  catch(e) { showToast('Copy failed — use Embed button'); }
+  document.body.removeChild(ta);
+}
+
+// ============================================================
+// SUCH TIP
+// ============================================================
+var TIP = {
+  wallet: 'DU64oNpbRNRCEZdRWN1STN2KWsj7W3Ar4U',
+  amount: 10,
+  valid:  true,
+  copies: 0,
+  shares: 0
+};
+
+function updateOpenWalletLink(e) {
+  // Update href before navigation so amount is current
+  var link = document.getElementById('tip-open-wallet');
+  if (link) link.href = 'dogecoin:' + TIP.wallet + '?amount=' + TIP.amount;
+  TIP.shares++;
+  document.getElementById('tip-stat-shares').textContent = TIP.shares;
+}
+
+function selectTipAmt(btn) {
+  document.querySelectorAll('.tip-amt').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  TIP.amount = parseInt(btn.getAttribute('data-amt'), 10);
+  var ci = document.getElementById('tip-custom-amt');
+  if (ci) ci.value = '';
+  renderTipQR();
+  updateOpenWalletHref();
+}
+
+function onCustomAmt(input) {
+  var val = parseInt(input.value, 10);
+  if (val && val > 0) {
+    document.querySelectorAll('.tip-amt').forEach(function(b) { b.classList.remove('active'); });
+    TIP.amount = val;
+    renderTipQR();
+    updateOpenWalletHref();
+  }
+}
+
+function updateOpenWalletHref() {
+  var link = document.getElementById('tip-open-wallet');
+  if (link) link.href = 'dogecoin:' + TIP.wallet + '?amount=' + TIP.amount;
+}
+
+function renderTipQR() {
+  if (!TIP.valid) return;
+  var uri = 'dogecoin:' + TIP.wallet + '?amount=' + TIP.amount;
+  var size = 200;
+  var target = document.getElementById('qr-render-target');
+  target.innerHTML = '';
+  try {
+    new QRCode(target, {
+      text: uri, width: size, height: size,
+      colorDark: '#0f1f3d', colorLight: '#f0e8d0',
+      correctLevel: QRCode.CorrectLevel.H
+    });
+  } catch(e) { console.error('Tip QR gen failed:', e); return; }
+
+  setTimeout(function() {
+    var qrImg = target.querySelector('img') || target.querySelector('canvas');
+    if (!qrImg) return;
+    var canvas = document.getElementById('tip-qr-canvas');
+    var ctx    = canvas.getContext('2d');
+    canvas.width = size; canvas.height = size;
+
+    function finish() {
+      var oSize = Math.round(size * 0.24);
+      var cx = Math.round(size / 2), cy = Math.round(size / 2);
+      var r  = Math.round(oSize / 2);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      if (LOGO_LOADED && LOGO_IMG) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(LOGO_IMG, cx - r, cy - r, oSize, oSize);
+      } else {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fillStyle = '#0f1f3d';
+        ctx.fill();
+        ctx.font = '700 ' + Math.round(oSize * 0.68) + 'px Georgia, serif';
+        ctx.fillStyle = '#c9963a';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('\u00D0', cx, cy);
+      }
+      ctx.restore();
+    }
+
+    if (qrImg.tagName === 'CANVAS') { ctx.drawImage(qrImg, 0, 0, size, size); finish(); }
+    else if (qrImg.complete)        { ctx.drawImage(qrImg, 0, 0, size, size); finish(); }
+    else { qrImg.onload = function() { ctx.drawImage(qrImg, 0, 0, size, size); finish(); }; }
+  }, 120);
+}
+
+function copyTipWallet() {
+  var text = TIP.wallet;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() {
+      TIP.copies++;
+      document.getElementById('tip-stat-copies').textContent = TIP.copies;
+      showToast('Wallet copied');
+    }).catch(function() { fallbackCopy(text); });
+  } else { fallbackCopy(text); TIP.copies++; document.getElementById('tip-stat-copies').textContent = TIP.copies; }
+}
+
+// ============================================================
+// IOT FOUNDERS WALLET COPY
+// ============================================================
+function copyFoundersWallet() {
+  var addr = 'DU64oNpbRNRCEZdRWN1STN2KWsj7W3Ar4U';
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(addr).then(function() { showToast('Founders wallet copied'); }).catch(function() { fallbackCopy(addr); });
+  } else { fallbackCopy(addr); }
+}
+
+// ============================================================
+// COLOUR MATH
+// ============================================================
+function hsvToRgb(h, s, v) {
+  var i = Math.floor(h / 60) % 6;
+  var f = h / 60 - Math.floor(h / 60);
+  var p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+  var r, g, b;
+  switch(i) {
+    case 0: r=v; g=t; b=p; break; case 1: r=q; g=v; b=p; break;
+    case 2: r=p; g=v; b=t; break; case 3: r=p; g=q; b=v; break;
+    case 4: r=t; g=p; b=v; break; default: r=v; g=p; b=q; break;
+  }
+  return [Math.round(r*255), Math.round(g*255), Math.round(b*255)];
+}
+
+function rgbToHsv(r, g, b) {
+  r/=255; g/=255; b/=255;
+  var max=Math.max(r,g,b), min=Math.min(r,g,b), d=max-min, h, s=max===0?0:d/max, v=max;
+  if (max===min) { h=0; }
+  else {
+    switch(max) {
+      case r: h=(g-b)/d+(g<b?6:0); break;
+      case g: h=(b-r)/d+2; break;
+      default: h=(r-g)/d+4; break;
+    }
+    h/=6;
+  }
+  return [h*360, s, v];
+}
+
+function rgbToHex(r, g, b) {
+  return '#' + [r,g,b].map(function(v) { return ('0'+Math.max(0,Math.min(255,v)).toString(16)).slice(-2); }).join('');
+}
+
+function hexToRgb(hex) {
+  return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
+}
+
+function selectTheme()  {}
+function onCustomColor(){}
+
+// ============================================================
+// VISITOR COUNTER — CountAPI
+// READS: countapi.xyz hit endpoint
+// WRITES: #counter-num, #counter-bar-fill
+// DECISION: namespace = dogefundme.com, key = visitors
+//   Counter starts at 420 floor — if API returns < 420 we show 420
+//   so the "fictional until real" threshold is built in.
+// ============================================================
+var COUNTER_GOAL = 10000;
+var COUNTER_FLOOR = 420;
+
+// ============================================================
+// VISITOR COUNTER — CountAPI
+// READS: countapi.xyz hit endpoint
+// WRITES: #counter-num, #counter-bar-fill
+// DECISION: 420 floor, localStorage fallback, exponential backoff
+// ============================================================
+var COUNTER_GOAL  = 10000;
+var COUNTER_FLOOR = 420;
+var COUNTER_RETRY_DELAY = 1000;
+var COUNTER_MAX_RETRIES = 4;
+
+function initCounter() {
+  fetchCounterWithRetry(0);
+}
+
+function fetchCounterWithRetry(attempt) {
+  fetch('https://api.countapi.xyz/hit/dogefundme.com/visitors')
+    .then(function(res) {
+      if (!res.ok) throw new Error('CountAPI status ' + res.status);
+      return res.json();
+    })
+    .then(function(data) {
+      var raw   = data.value || 0;
+      var count = Math.max(raw, COUNTER_FLOOR);
+      // Persist to localStorage so next visit has a floor if API is down
+      try { localStorage.setItem('dfm_visitor_count', count); } catch(e) {}
+      animateCounter(count);
+    })
+    .catch(function(err) {
+      console.error('CountAPI attempt ' + (attempt + 1) + ' failed:', err);
+      if (attempt < COUNTER_MAX_RETRIES) {
+        // Exponential backoff: 1s, 2s, 4s, 8s
+        setTimeout(function() {
+          fetchCounterWithRetry(attempt + 1);
+        }, COUNTER_RETRY_DELAY * Math.pow(2, attempt));
+      } else {
+        // All retries exhausted — use localStorage fallback or floor
+        var stored = 0;
+        try { stored = parseInt(localStorage.getItem('dfm_visitor_count') || '0', 10); } catch(e) {}
+        animateCounter(Math.max(stored, COUNTER_FLOOR));
+      }
+    });
+}
+
+function animateCounter(target) {
+  var el   = document.getElementById('counter-num');
+  var bar  = document.getElementById('counter-bar-fill');
+  var goal = document.getElementById('counter-goal-label');
+  var start = 0;
+  var duration = 1400;
+  var startTime = null;
+
+  goal.textContent = 'goal: ' + COUNTER_GOAL.toLocaleString();
+
+  function step(ts) {
+    if (!startTime) startTime = ts;
+    var progress = Math.min((ts - startTime) / duration, 1);
+    var eased    = 1 - Math.pow(1 - progress, 3);
+    var current  = Math.round(eased * target);
+    el.textContent = current.toLocaleString();
+    var pct = Math.min((target / COUNTER_GOAL) * 100, 100);
+    bar.style.width = (eased * pct) + '%';
+    if (progress < 1) requestAnimationFrame(step);
+    else {
+      el.textContent = target.toLocaleString();
+      bar.style.width = pct + '%';
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+// ============================================================
+// GUEST BOOK — Web3Forms
+// READS: #gb-name, #gb-wallet, #gb-message
+// WRITES: submits to Web3Forms, appends to entry list
+// DECISION: Web3Forms free tier — submissions emailed to owner
+//   Access key is public-safe (rate limited by Web3Forms)
+//   Honor system dedup — no IP enforcement in v1
+// ============================================================
+var GB_ENTRIES = [];
+var GB_SUBMITTED = false;
+
+function submitGuestBook() {
+  var name    = document.getElementById('gb-name').value.trim();
+  var wallet  = document.getElementById('gb-wallet').value.trim();
+  var message = document.getElementById('gb-message').value.trim();
+
+  if (!name) { showToast('Please enter your name'); return; }
+  if (!message) { showToast('Please leave a message'); return; }
+  if (wallet && !isValidDoge(wallet)) { showToast('Wallet looks invalid — leave blank to skip'); return; }
+  if (GB_SUBMITTED) { showToast('You\'ve already signed — thank you'); return; }
+
+  // Validate message length
+  if (message.length > 280) { showToast('Message too long — max 280 chars'); return; }
+
+  var btn = document.getElementById('gb-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Signing...';
+
+  // Submit via Web3Forms
+  // DECISION: access_key below is a placeholder — replace with your
+  // real Web3Forms key from web3forms.com (free signup)
+  var payload = {
+    access_key: 'YOUR_WEB3FORMS_KEY',
+    subject:    'DogeFundMe Guest Book — ' + name,
+    name:       name,
+    message:    message,
+    wallet:     wallet || '(not provided)',
+    from_name:  'DogeFundMe Guest Book'
+  };
+
+  fetch('https://api.web3forms.com/submit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    if (data.success) {
+      GB_SUBMITTED = true;
+      appendGBEntry(name, message, wallet);
+      document.getElementById('gb-name').value    = '';
+      document.getElementById('gb-wallet').value  = '';
+      document.getElementById('gb-message').value = '';
+      btn.textContent = 'Signed ✓';
+      updateFoundersSocialProof();
+      showToast('Welcome to the book 🐕');
+    } else {
+      console.error('Web3Forms error:', data);
+      btn.disabled = false;
+      btn.textContent = 'Sign the Book';
+      showToast('Submission failed — try again');
+    }
+  })
+  .catch(function(err) {
+    console.error('Guest book submit failed:', err);
+    btn.disabled = false;
+    btn.textContent = 'Sign the Book';
+    showToast('Network error — check connection');
+  });
+}
+
+function appendGBEntry(name, message, wallet) {
+  var entries  = document.getElementById('guestbook-entries');
+  var countEl  = document.getElementById('gb-count');
+  var existing = entries.querySelectorAll('.guestbook-entry').length;
+  var num      = existing + 1;
+
+  var now    = new Date();
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var dateStr = months[now.getMonth()] + ' ' + now.getFullYear();
+
+  // Persist to localStorage so guestbook.html history page picks it up
+  try {
+    var stored = JSON.parse(localStorage.getItem('dfm_guestbook_entries') || '[]');
+    stored.push({ name: name, message: message, wallet: wallet || null, date: dateStr });
+    localStorage.setItem('dfm_guestbook_entries', JSON.stringify(stored));
+  } catch(e) { console.error('localStorage write failed:', e); }
+
+  var entry = document.createElement('div');
+  entry.className = 'guestbook-entry';
+  var walletLine = wallet ? '<div class="entry-wallet">' + wallet.slice(0,8) + '…' + wallet.slice(-6) + '</div>' : '';
+  entry.innerHTML =
+    '<div class="entry-num">#' + num + '</div>' +
+    '<div class="entry-body">' +
+      '<div class="entry-name">' + escapeHtml(name) + '</div>' +
+      '<div class="entry-message">&ldquo;' + escapeHtml(message) + '&rdquo;</div>' +
+      '<div class="entry-meta">' + dateStr + '</div>' +
+      walletLine +
+    '</div>';
+
+  entries.appendChild(entry);
+  entries.scrollTop = entries.scrollHeight;
+  countEl.textContent = num;
+}
+
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// ============================================================
+// FIX: copyTipWallet reads data-full attribute
+// ============================================================
+function copyTipWallet() {
+  var el   = document.getElementById('tip-wallet-text');
+  var text = el ? (el.getAttribute('data-full') || el.textContent) : TIP.wallet;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() {
+      TIP.copies++;
+      document.getElementById('tip-stat-copies').textContent = TIP.copies;
+      showToast('Wallet copied');
+    }).catch(function() { fallbackCopy(text); });
+  } else {
+    fallbackCopy(text);
+    TIP.copies++;
+    document.getElementById('tip-stat-copies').textContent = TIP.copies;
+  }
+}
+
+// ============================================================
+// FIX: copyFoundersWallet reads data-full attribute
+// ============================================================
+function copyFoundersWallet() {
+  var el   = document.querySelector('.founders-wallet-addr');
+  var addr = el ? (el.getAttribute('data-full') || el.textContent) : 'DU64oNpbRNRCEZdRWN1STN2KWsj7W3Ar4U';
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(addr).then(function() { showToast('Founders wallet copied'); }).catch(function() { fallbackCopy(addr); });
+  } else { fallbackCopy(addr); }
+}
+// ============================================================
+// DOGECHAIN FUND BALANCE
+// READS: dogechain.info public API — wallet balance
+// WRITES: #iot-stat-fund
+// DECISION: No API key required. Public endpoint.
+//   On failure shows '—' rather than misleading 0 Ð.
+// ============================================================
+var FUND_WALLET = 'DU64oNpbRNRCEZdRWN1STN2KWsj7W3Ar4U';
+
+function fetchFundBalance() {
+  var el = document.getElementById('iot-stat-fund');
+  if (!el) return;
+  fetch('https://dogechain.info/api/v1/address/balance/' + FUND_WALLET)
+    .then(function(res) {
+      if (!res.ok) throw new Error('Dogechain status ' + res.status);
+      return res.json();
+    })
+    .then(function(data) {
+      if (data.success && data.balance !== undefined) {
+        var bal = parseFloat(data.balance);
+        var display = bal >= 1000000
+          ? (bal / 1000000).toFixed(2) + 'M Ð'
+          : bal >= 1000
+          ? (bal / 1000).toFixed(1) + 'k Ð'
+          : bal.toLocaleString(undefined, {maximumFractionDigits: 2}) + ' Ð';
+        el.textContent = display;
+      } else {
+        el.textContent = '—';
+      }
+    })
+    .catch(function(err) {
+      console.error('Dogechain balance fetch failed:', err);
+      el.textContent = '—';
+    });
+}
+
+// ============================================================
+// FOUNDERS SOCIAL PROOF
+// READS: localStorage guest book entries count
+// WRITES: #founders-social-proof
+// DECISION: uses localStorage count + 1 (seed entry) as proxy
+//   until Supabase migration in v2.0.0
+// ============================================================
+function updateFoundersSocialProof() {
+  var el = document.getElementById('founders-social-proof');
+  if (!el) return;
+  var stored = 0;
+  try {
+    var raw = localStorage.getItem('dfm_guestbook_entries');
+    if (raw) stored = JSON.parse(raw).length;
+  } catch(e) {}
+  // +1 for seed entry, +1 for the signing that just happened
+  var total = stored + 1;
+  if (total > 1) {
+    el.textContent = 'Join ' + total + ' others already in the book.';
+  }
+}
+
+// ============================================================
+// END SCALPEL CUTS — functions below removed in v1.3.0:
+//   shareTipLink()     — vestigial, replaced by updateOpenWalletLink
+//   downloadTipQR()    — HTML element removed in v1.0.4
+//   copyTipEmbed()     — HTML element removed in v1.0.4
+//   onTipNameInput()   — input element removed in v1.0.4
+//   onTipWalletInput() — input element removed in v1.0.4
+// ============================================================
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function() { t.classList.remove('show'); }, 2800);
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('wallet-input').addEventListener('input', onWalletInput);
+  document.getElementById('label-input').addEventListener('input', onLabelInput);
+  document.getElementById('color-dark').value  = STATE.darkColor;
+  document.getElementById('color-light').value = STATE.lightColor;
+  preloadLogo();
+  initWheel();
+  renderTipQR();
+  initCounter();
+  fetchFundBalance();
+  updateFoundersSocialProof();
+  log('DogeFundMe v1.3.0 booted');
+});
+</script>
+</body>
+</html>
