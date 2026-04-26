@@ -1,0 +1,2249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="FunDoge — design your own mini-golf hole. Play it. Fund it. Build it IRL. The internet's first community-funded meme golf course.">
+<meta property="og:type"        content="website">
+<meta property="og:url"         content="https://dogefundme.com/">
+<meta property="og:title"       content="FunDoge — Such Golf. Very Real. Wow.">
+<meta property="og:description" content="Design your hole. Play it. Fund the real one.">
+<meta property="og:image"       content="https://dogefundme.com/logo.png">
+<meta name="twitter:card"        content="summary_large_image">
+<meta name="twitter:site"        content="@dogefundme">
+<meta name="twitter:title"       content="FunDoge — Such Golf. Very Real. Wow.">
+<meta name="twitter:description" content="Design your hole. Play it. Fund the real one.">
+<meta name="twitter:image"       content="https://dogefundme.com/logo.png">
+<link rel="canonical" href="https://dogefundme.com/">
+<!-- ca-pub-8826956454892311 -->
+<title>FunDoge — Such Golf. Very Real. Wow.</title>
+<!--
+// ============================================================
+// Author: Vincent Gonzalez | © 2026 Zengine™ | www.zengine.site
+// Project: DogeFundMe → FunDoge
+// File: dogefundme_index_v2.0.0.html
+// Version: 2.0.0
+// ------------------------------------------------------------
+// CHANGE LOG v1.3.0 → v2.0.0
+//   - PIVOT: QR generator removed from hero — moved to footer one-liner
+//   - PIVOT: FunDoge game teaser is now the primary hero section
+//   - ADDED: Pixel/retro font layer (Press Start 2P) for game branding
+//   - ADDED: FunDoge phase roadmap (Game → Leaderboard → Arcade → IRL)
+//   - ADDED: Animated pixel golf ball canvas (hero decoration)
+//   - ADDED: "1 DOGE Arcade" explainer section
+//   - ADDED: "Design Your Hole" concept teaser
+//   - ADDED: Community hole showcase placeholder
+//   - KEPT:  The Destination / IOT manifesto (adjusted language)
+//   - KEPT:  Visitor counter
+//   - KEPT:  Guest book
+//   - KEPT:  Fund balance from Dogechain API
+//   - DECISION: No email capture CTA per Vince — just vibe for now
+//   - DECISION: 1 DOGE = 1 DOGE arcade price — fixed, revisit if needed
+//   - DECISION: QR generator referenced in footer only, links to tipstreams
+//   - REMOVED: QR generator panels (03 colours, 02 size, 01 wallet, preview)
+//   - REMOVED: Such Tip section (belongs to TipStreams product)
+// ------------------------------------------------------------
+// WORKFLOW STACK:
+//   1. Boot → preloadLogo() → initPixelCanvas() → initCounter()
+//   2. fetchFundBalance() → Dogechain API
+//   3. updateFoundersSocialProof() → localStorage
+//   4. Guest book → Web3Forms submit
+//   5. Pixel canvas → rAF animation loop (golf ball bouncing)
+// ------------------------------------------------------------
+// ASSET MANIFEST:
+//   - Press Start 2P: Google Fonts (pixel/retro game font)
+//   - Syne + Space Mono: Google Fonts (brand)
+//   - ./logo.png — house + Ð logo
+// ------------------------------------------------------------
+// BOOT ORDER:
+//   DOMContentLoaded → preloadLogo → initPixelCanvas → initCounter
+//   → fetchFundBalance → updateFoundersSocialProof
+// ============================================================
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Syne:wght@400;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================================
+   DESIGN SYSTEM — NAVY PREMIUM + PIXEL ARCADE LAYER
+   ============================================================ */
+:root {
+  /* Background scale */
+  --navy-900: #04091a;
+  --navy-800: #070e28;
+  --navy-700: #0b1535;
+  --navy-600: #0f1f3d;
+  --navy-500: #162847;
+  --navy-400: #1e3560;
+  --navy-300: #2a4878;
+  --navy-200: #3d6094;
+
+  /* Gold scale */
+  --gold-bright: #f0c060;
+  --gold:        #c9963a;
+  --gold-dim:    #8a6020;
+  --gold-glow:   rgba(201,150,58,0.15);
+  --gold-glass:  rgba(201,150,58,0.08);
+
+  /* Arcade accent — bright green pixel */
+  --pixel-green:  #39ff14;
+  --pixel-green2: #00e676;
+  --pixel-cyan:   #00e5ff;
+  --pixel-yellow: #ffea00;
+  --pixel-pink:   #ff4081;
+
+  /* Text */
+  --cream:    #f0e8d0;
+  --cream-dim:#b8a888;
+  --blue-mute:#5a7898;
+  --blue-hint:#3a5068;
+
+  /* Glass surfaces */
+  --glass-bg:     rgba(15,31,61,0.55);
+  --glass-bg-hi:  rgba(22,40,71,0.7);
+  --glass-border: rgba(201,150,58,0.18);
+  --glass-border-hi: rgba(201,150,58,0.35);
+  --glass-blur:   blur(18px);
+
+  /* Functional */
+  --success: #3db870;
+  --danger:  #e05c3a;
+
+  /* Type */
+  --font-head:  'Syne', sans-serif;
+  --font-mono:  'Space Mono', monospace;
+  --font-pixel: 'Press Start 2P', monospace;
+
+  /* Radii */
+  --r-sm:  8px;
+  --r-md:  14px;
+  --r-lg:  20px;
+  --r-xl:  28px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+/* ============================================================
+   BACKGROUND — deep navy, layered orbs, grid
+   ============================================================ */
+body {
+  background: var(--navy-900);
+  color: var(--cream);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 15% 10%,  rgba(30,53,96,0.7)   0%, transparent 60%),
+    radial-gradient(ellipse 50% 60% at 85% 80%,  rgba(15,31,61,0.8)   0%, transparent 60%),
+    radial-gradient(ellipse 40% 40% at 50% 50%,  rgba(57,255,20,0.02) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(57,255,20,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(57,255,20,0.02) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+.page-wrap {
+  position: relative;
+  z-index: 1;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 24px 100px;
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28px 0 32px;
+  border-bottom: 1px solid var(--glass-border);
+  margin-bottom: 0;
+}
+
+.logo-mark {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.logo-coin {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, var(--gold), var(--gold-bright));
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Georgia, serif;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--navy-900);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 3px var(--gold-glass), 0 4px 20px rgba(201,150,58,0.3);
+}
+
+.logo-text { display: flex; flex-direction: column; gap: 2px; }
+
+.logo-main {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 21px;
+  color: var(--gold-bright);
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+
+.logo-sub {
+  font-size: 10px;
+  color: var(--blue-mute);
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+}
+
+.version-tag {
+  font-size: 10px;
+  color: var(--blue-mute);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  padding: 5px 12px;
+  border-radius: 20px;
+  letter-spacing: 1px;
+  backdrop-filter: var(--glass-blur);
+}
+
+/* ============================================================
+   FUNDOGE HERO — full-width, pixel + glass hybrid
+   ============================================================ */
+.fundoge-hero {
+  position: relative;
+  padding: 72px 0 60px;
+  border-bottom: 1px solid var(--glass-border);
+  overflow: hidden;
+}
+
+/* Pixel scanline overlay on hero only */
+.fundoge-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    rgba(0,0,0,0.07) 3px,
+    rgba(0,0,0,0.07) 4px
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+.fundoge-hero-inner {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 48px;
+  align-items: center;
+}
+
+@media (max-width: 740px) {
+  .fundoge-hero-inner { grid-template-columns: 1fr; }
+  .hero-canvas-col { order: -1; }
+}
+
+/* Pixel wordmark */
+.fundoge-wordmark {
+  font-family: var(--font-pixel);
+  font-size: clamp(22px, 4vw, 38px);
+  color: var(--pixel-green);
+  letter-spacing: -1px;
+  line-height: 1.3;
+  margin-bottom: 8px;
+  text-shadow:
+    0 0 20px rgba(57,255,20,0.5),
+    0 0 40px rgba(57,255,20,0.2),
+    3px 3px 0px rgba(0,0,0,0.8);
+  animation: flicker 8s infinite;
+}
+
+@keyframes flicker {
+  0%, 95%, 100% { opacity: 1; }
+  96%            { opacity: 0.85; }
+  97%            { opacity: 1; }
+  98%            { opacity: 0.9; }
+}
+
+.fundoge-tagline {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--pixel-yellow);
+  letter-spacing: 1px;
+  margin-bottom: 32px;
+  opacity: 0.9;
+  text-shadow: 0 0 12px rgba(255,234,0,0.4);
+}
+
+.fundoge-desc {
+  font-size: 15px;
+  color: var(--cream-dim);
+  line-height: 1.85;
+  max-width: 520px;
+  margin-bottom: 32px;
+}
+
+.fundoge-desc strong { color: var(--cream); }
+
+.fundoge-status-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  padding: 8px 14px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+
+.status-pill.building {
+  background: rgba(57,255,20,0.08);
+  border: 1px solid rgba(57,255,20,0.3);
+  color: var(--pixel-green);
+}
+
+.status-pill.building::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--pixel-green);
+  box-shadow: 0 0 8px var(--pixel-green);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.7); }
+}
+
+.status-pill.arcade {
+  background: rgba(0,229,118,0.08);
+  border: 1px solid rgba(0,229,118,0.25);
+  color: var(--pixel-cyan);
+}
+
+/* ============================================================
+   PIXEL CANVAS — animated golf preview
+   ============================================================ */
+.hero-canvas-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.pixel-screen {
+  background: #020a04;
+  border: 3px solid var(--pixel-green);
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px rgba(57,255,20,0.15),
+    0 0 30px rgba(57,255,20,0.12),
+    inset 0 0 20px rgba(57,255,20,0.04);
+  overflow: hidden;
+  position: relative;
+}
+
+.pixel-screen::after {
+  content: 'HOLE 1 — DOGECOIN CANYON';
+  position: absolute;
+  top: 8px;
+  left: 0; right: 0;
+  text-align: center;
+  font-family: var(--font-pixel);
+  font-size: 5px;
+  color: rgba(57,255,20,0.5);
+  letter-spacing: 0.5px;
+  pointer-events: none;
+}
+
+#pixel-canvas { display: block; }
+
+.pixel-screen-label {
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  color: var(--blue-mute);
+  letter-spacing: 1px;
+  text-align: center;
+}
+
+/* ============================================================
+   FUNDOGE PHASE ROADMAP
+   ============================================================ */
+.fundoge-phases {
+  padding: 72px 0 0;
+}
+
+.section-eyebrow {
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 32px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.section-eyebrow::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--glass-border);
+}
+
+.phase-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 72px;
+}
+
+@media (max-width: 740px) { .phase-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.phase-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  padding: 24px 20px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+
+.phase-card:hover {
+  border-color: var(--glass-border-hi);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+/* Active phase gets pixel green border */
+.phase-card.active-phase {
+  border-color: var(--pixel-green);
+  box-shadow: 0 0 0 1px rgba(57,255,20,0.1), 0 8px 32px rgba(57,255,20,0.08);
+}
+
+.phase-card.active-phase::before {
+  content: 'NOW';
+  position: absolute;
+  top: 12px; right: 12px;
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  letter-spacing: 1px;
+  color: var(--pixel-green);
+  border: 1px solid var(--pixel-green);
+  padding: 3px 7px;
+  border-radius: 3px;
+  text-shadow: 0 0 8px rgba(57,255,20,0.5);
+}
+
+.phase-icon {
+  font-size: 28px;
+  margin-bottom: 12px;
+  line-height: 1;
+}
+
+.phase-num {
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  letter-spacing: 2px;
+  color: var(--gold-dim);
+  margin-bottom: 8px;
+}
+
+.phase-name {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--cream);
+  margin-bottom: 8px;
+  letter-spacing: -0.3px;
+}
+
+.phase-desc {
+  font-size: 11px;
+  color: var(--blue-mute);
+  line-height: 1.65;
+}
+
+.phase-target {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--gold);
+  margin-top: 12px;
+}
+
+/* ============================================================
+   ARCADE SECTION — 1 DOGE explainer
+   ============================================================ */
+.arcade-section {
+  padding: 72px 0 0;
+}
+
+.arcade-inner {
+  background: linear-gradient(135deg, #020a04 0%, #04091a 60%, #070e28 100%);
+  border: 2px solid var(--pixel-green);
+  border-radius: var(--r-xl);
+  padding: 52px 48px;
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(57,255,20,0.1),
+    0 20px 60px rgba(0,0,0,0.6),
+    inset 0 1px 0 rgba(57,255,20,0.08);
+}
+
+/* CRT scanlines on arcade block */
+.arcade-inner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.12) 2px,
+    rgba(0,0,0,0.12) 3px
+  );
+  pointer-events: none;
+  border-radius: var(--r-xl);
+}
+
+.arcade-inner::after {
+  content: '';
+  position: absolute;
+  top: -100px; left: 50%;
+  transform: translateX(-50%);
+  width: 500px; height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(57,255,20,0.04) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.arcade-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 640px) { .arcade-grid { grid-template-columns: 1fr; } }
+
+.arcade-coin-display {
+  text-align: center;
+}
+
+.arcade-coin-big {
+  font-family: var(--font-pixel);
+  font-size: clamp(48px, 8vw, 80px);
+  color: var(--pixel-green);
+  line-height: 1;
+  margin-bottom: 8px;
+  text-shadow:
+    0 0 30px rgba(57,255,20,0.6),
+    0 0 60px rgba(57,255,20,0.2),
+    4px 4px 0 rgba(0,0,0,0.8);
+  animation: coin-pulse 2s ease-in-out infinite;
+}
+
+@keyframes coin-pulse {
+  0%, 100% { text-shadow: 0 0 30px rgba(57,255,20,0.6), 0 0 60px rgba(57,255,20,0.2), 4px 4px 0 rgba(0,0,0,0.8); }
+  50%       { text-shadow: 0 0 50px rgba(57,255,20,0.9), 0 0 100px rgba(57,255,20,0.35), 4px 4px 0 rgba(0,0,0,0.8); }
+}
+
+.arcade-coin-label {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--pixel-yellow);
+  letter-spacing: 2px;
+  text-shadow: 0 0 10px rgba(255,234,0,0.4);
+}
+
+.arcade-insert-label {
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  color: rgba(57,255,20,0.5);
+  letter-spacing: 1px;
+  margin-top: 8px;
+  animation: blink 1.2s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+.arcade-copy {}
+
+.arcade-title {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: clamp(22px, 3.5vw, 32px);
+  color: var(--cream);
+  letter-spacing: -0.5px;
+  line-height: 1.1;
+  margin-bottom: 16px;
+}
+
+.arcade-title span { color: var(--pixel-green); }
+
+.arcade-text {
+  font-size: 13px;
+  color: var(--cream-dim);
+  line-height: 1.85;
+  margin-bottom: 20px;
+}
+
+.arcade-text strong { color: var(--cream); }
+
+.arcade-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.arcade-rule {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--cream-dim);
+  line-height: 1.5;
+}
+
+.arcade-rule-icon {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--pixel-green);
+  flex-shrink: 0;
+  margin-top: 2px;
+  opacity: 0.8;
+}
+
+/* ============================================================
+   DESIGN YOUR HOLE — teaser section
+   ============================================================ */
+.design-section {
+  padding: 72px 0 0;
+}
+
+.design-inner {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 640px) { .design-inner { grid-template-columns: 1fr; } }
+
+.design-block {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  padding: 32px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.25s;
+}
+
+.design-block:hover { border-color: var(--glass-border-hi); }
+
+.design-block.featured {
+  border-color: var(--pixel-cyan);
+  box-shadow: 0 0 0 1px rgba(0,229,255,0.08), 0 12px 40px rgba(0,229,255,0.06);
+}
+
+.design-block-icon {
+  font-size: 36px;
+  margin-bottom: 16px;
+  line-height: 1;
+}
+
+.design-block-head {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--pixel-cyan);
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+  text-shadow: 0 0 10px rgba(0,229,255,0.3);
+}
+
+.design-block-title {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--cream);
+  margin-bottom: 10px;
+  letter-spacing: -0.3px;
+}
+
+.design-block-text {
+  font-size: 12px;
+  color: var(--cream-dim);
+  line-height: 1.75;
+}
+
+.design-block-text strong { color: var(--cream); }
+
+.coming-soon-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  color: var(--pixel-pink);
+  border: 1px solid rgba(255,64,129,0.3);
+  background: rgba(255,64,129,0.05);
+  padding: 5px 10px;
+  border-radius: 3px;
+  margin-top: 14px;
+}
+
+/* ============================================================
+   THE DESTINATION — IRL section
+   ============================================================ */
+.destination-section {
+  padding: 72px 0 0;
+}
+
+.iot-hero {
+  margin-bottom: 52px;
+}
+
+.iot-title {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: clamp(32px, 5.5vw, 58px);
+  line-height: 1.0;
+  letter-spacing: -2px;
+  color: var(--cream);
+  margin-bottom: 20px;
+}
+
+.iot-title span { color: var(--gold-bright); }
+
+.iot-lead {
+  font-size: 16px;
+  color: var(--cream-dim);
+  line-height: 1.85;
+  max-width: 640px;
+  border-left: 2px solid var(--gold);
+  padding-left: 20px;
+}
+
+.iot-lead strong { color: var(--cream); }
+
+/* Phase roadmap — destination */
+.iot-phases {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 52px;
+}
+
+@media (max-width: 740px) { .iot-phases { grid-template-columns: repeat(2, 1fr); } }
+
+.iot-phase-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  padding: 24px 20px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+
+.iot-phase-card:hover {
+  border-color: var(--glass-border-hi);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+.iot-phase-card.active-phase {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold-glass), 0 8px 32px rgba(201,150,58,0.15);
+}
+
+.iot-phase-card.active-phase::before {
+  content: 'Active';
+  position: absolute;
+  top: 14px; right: 14px;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--gold);
+  border: 1px solid var(--gold);
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+
+.phase-num-gold {
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+  margin-bottom: 10px;
+}
+
+.iot-phase-name {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--cream);
+  margin-bottom: 8px;
+}
+
+.iot-phase-target {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gold-bright);
+  font-family: var(--font-head);
+  margin-bottom: 8px;
+}
+
+.iot-phase-desc {
+  font-size: 11px;
+  color: var(--blue-mute);
+  line-height: 1.6;
+}
+
+/* Body blocks */
+.iot-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 52px;
+}
+
+@media (max-width: 740px) { .iot-body { grid-template-columns: 1fr; } }
+
+.iot-block {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  padding: 28px;
+}
+
+.iot-block-head {
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 14px;
+}
+
+.iot-block-text {
+  font-size: 13px;
+  color: var(--cream-dim);
+  line-height: 1.85;
+}
+
+.iot-block-text strong { color: var(--cream); }
+
+/* Founders CTA */
+.founders-cta {
+  background: linear-gradient(135deg, rgba(15,31,61,0.9) 0%, rgba(22,40,71,0.95) 100%);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border-hi);
+  border-radius: var(--r-xl);
+  padding: 52px 48px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(201,150,58,0.1);
+}
+
+.founders-cta::before {
+  content: '';
+  position: absolute;
+  top: -80px; left: 50%;
+  transform: translateX(-50%);
+  width: 400px; height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(201,150,58,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.founders-eyebrow {
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+  margin-bottom: 16px;
+}
+
+.founders-title {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: clamp(24px, 4vw, 40px);
+  letter-spacing: -1px;
+  color: var(--cream);
+  margin-bottom: 16px;
+  line-height: 1.1;
+}
+
+.founders-title span { color: var(--gold-bright); }
+
+.founders-sub {
+  font-size: 14px;
+  color: var(--cream-dim);
+  line-height: 1.75;
+  max-width: 520px;
+  margin: 0 auto 32px;
+}
+
+.founders-wallet {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(4,9,26,0.7);
+  border: 1px solid var(--glass-border-hi);
+  border-radius: 12px;
+  padding: 14px 20px;
+  margin-bottom: 28px;
+}
+
+.founders-wallet-addr {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--cream-dim);
+  letter-spacing: 0.5px;
+}
+
+.founders-wallet-copy {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  background: var(--gold-glass);
+  border: 1px solid var(--glass-border-hi);
+  color: var(--gold-bright);
+  padding: 7px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+
+.founders-wallet-copy:hover { background: rgba(201,150,58,0.22); }
+
+.founders-stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.founders-stat-val {
+  font-family: var(--font-head);
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--gold-bright);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.founders-stat-label {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--blue-mute);
+}
+
+.founders-divider {
+  width: 1px;
+  height: 40px;
+  background: var(--glass-border);
+}
+
+/* ============================================================
+   VISITOR COUNTER
+   ============================================================ */
+.counter-section {
+  margin-top: 72px;
+  display: flex;
+  justify-content: center;
+}
+
+.counter-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-xl);
+  padding: 40px 56px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  min-width: 320px;
+}
+
+.counter-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(201,150,58,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.counter-eyebrow {
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+  margin-bottom: 14px;
+}
+
+.counter-num {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 64px;
+  color: var(--gold-bright);
+  letter-spacing: -3px;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.counter-label {
+  font-size: 11px;
+  color: var(--blue-mute);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.counter-bar {
+  margin-top: 20px;
+  height: 3px;
+  background: var(--glass-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.counter-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold-dim), var(--gold-bright));
+  border-radius: 2px;
+  transition: width 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+  width: 0%;
+}
+
+.counter-goal {
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--blue-hint);
+  letter-spacing: 1px;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* ============================================================
+   GUEST BOOK
+   ============================================================ */
+.guestbook-section { margin-top: 72px; }
+
+.guestbook-inner {
+  background: linear-gradient(160deg, #0c1828 0%, #070e1e 100%);
+  border: 1px solid rgba(201,150,58,0.25);
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6), inset 0 1px 0 rgba(201,150,58,0.15);
+}
+
+.guestbook-header {
+  background: linear-gradient(135deg, #0f1f3d 0%, #162847 40%, #0f1828 100%);
+  border-bottom: 1px solid rgba(201,150,58,0.3);
+  padding: 32px 40px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.guestbook-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 8px,
+    rgba(201,150,58,0.02) 8px,
+    rgba(201,150,58,0.02) 9px
+  );
+  pointer-events: none;
+}
+
+.guestbook-title-wrap { position: relative; }
+
+.guestbook-ornament {
+  font-size: 22px;
+  color: var(--gold);
+  line-height: 1;
+  margin-bottom: 6px;
+  letter-spacing: 8px;
+}
+
+.guestbook-title {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 24px;
+  color: var(--gold-bright);
+  letter-spacing: -0.5px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.guestbook-subtitle {
+  font-size: 11px;
+  color: var(--blue-mute);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.guestbook-count-badge {
+  background: var(--gold-glass);
+  border: 1px solid var(--glass-border-hi);
+  border-radius: 12px;
+  padding: 12px 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.guestbook-count-num {
+  font-family: var(--font-head);
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--gold-bright);
+  line-height: 1;
+}
+
+.guestbook-count-label {
+  font-size: 9px;
+  color: var(--blue-mute);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-top: 3px;
+}
+
+.guestbook-entries {
+  padding: 0 40px;
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(201,150,58,0.2) transparent;
+}
+
+.guestbook-entries::-webkit-scrollbar { width: 4px; }
+.guestbook-entries::-webkit-scrollbar-track { background: transparent; }
+.guestbook-entries::-webkit-scrollbar-thumb { background: rgba(201,150,58,0.2); border-radius: 2px; }
+
+.guestbook-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 0;
+  border-bottom: 1px solid rgba(201,150,58,0.07);
+}
+
+.guestbook-entry:last-child { border-bottom: none; }
+
+.entry-num {
+  font-size: 10px;
+  color: var(--gold-dim);
+  letter-spacing: 1px;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+  min-width: 28px;
+  margin-top: 2px;
+}
+
+.entry-body { flex: 1; }
+
+.entry-name {
+  font-family: var(--font-head);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--cream);
+  margin-bottom: 3px;
+  letter-spacing: -0.3px;
+}
+
+.entry-message {
+  font-size: 13px;
+  color: var(--cream-dim);
+  line-height: 1.6;
+  font-style: italic;
+}
+
+.entry-meta {
+  font-size: 10px;
+  color: var(--blue-hint);
+  letter-spacing: 1px;
+  margin-top: 4px;
+}
+
+.entry-wallet {
+  font-size: 10px;
+  color: var(--gold-dim);
+  font-family: var(--font-mono);
+  letter-spacing: 0.5px;
+}
+
+.guestbook-form-wrap {
+  padding: 28px 40px 36px;
+  border-top: 1px solid rgba(201,150,58,0.15);
+  background: rgba(4,9,26,0.3);
+}
+
+.guestbook-form-wrap::before {
+  content: '✦  Sign the Book  ✦';
+  display: block;
+  font-size: 11px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.gb-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 600px) { .gb-form-grid { grid-template-columns: 1fr; } }
+
+.gb-input {
+  width: 100%;
+  background: rgba(4,9,26,0.7);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm);
+  padding: 13px 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--cream);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.gb-input:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-glass);
+}
+
+.gb-input::placeholder { color: var(--blue-hint); }
+
+.gb-textarea {
+  width: 100%;
+  background: rgba(4,9,26,0.7);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm);
+  padding: 13px 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--cream);
+  outline: none;
+  resize: vertical;
+  min-height: 80px;
+  margin-bottom: 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  line-height: 1.6;
+}
+
+.gb-textarea:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-glass);
+}
+
+.gb-textarea::placeholder { color: var(--blue-hint); font-style: italic; }
+
+.gb-submit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.gb-hint {
+  font-size: 11px;
+  color: var(--blue-hint);
+  letter-spacing: 0.5px;
+  line-height: 1.5;
+}
+
+.btn-gb-submit {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, var(--gold), var(--gold-bright));
+  color: var(--navy-900);
+  font-weight: 700;
+  padding: 13px 28px;
+  border-radius: var(--r-sm);
+  border: none;
+  cursor: pointer;
+  transition: all 0.18s;
+  box-shadow: 0 4px 16px rgba(201,150,58,0.3);
+  flex-shrink: 0;
+}
+
+.btn-gb-submit:hover { box-shadow: 0 6px 24px rgba(201,150,58,0.45); transform: translateY(-1px); }
+.btn-gb-submit:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+.gb-view-all {
+  display: inline-block;
+  margin-top: 16px;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+  text-decoration: none;
+  text-align: center;
+  width: 100%;
+  transition: color 0.2s;
+}
+
+.gb-view-all:hover { color: var(--gold-bright); }
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+.toast {
+  position: fixed;
+  bottom: 36px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--glass-bg-hi);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border-hi);
+  color: var(--gold-bright);
+  padding: 13px 28px;
+  border-radius: 40px;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  z-index: 100;
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
+  opacity: 0;
+  white-space: nowrap;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+footer {
+  margin-top: 80px;
+  padding-top: 32px;
+  border-top: 1px solid var(--glass-border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  text-align: center;
+}
+
+.footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.footer-copy { font-size: 11px; color: var(--blue-hint); letter-spacing: 1px; }
+
+.footer-link {
+  font-size: 11px;
+  color: var(--blue-mute);
+  text-decoration: none;
+  letter-spacing: 1px;
+  transition: color 0.2s;
+}
+
+.footer-link:hover { color: var(--gold); }
+
+.footer-qr-line {
+  font-size: 11px;
+  color: var(--blue-hint);
+  letter-spacing: 0.5px;
+}
+
+.footer-qr-line a {
+  color: var(--gold-dim);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.footer-qr-line a:hover { color: var(--gold); }
+
+.footer-disclaimer {
+  font-size: 10px;
+  color: var(--blue-hint);
+  letter-spacing: 0.5px;
+  opacity: 0.7;
+}
+
+/* ============================================================
+   ZG MONOGRAM
+   ============================================================ */
+.zg-mono {
+  position: fixed;
+  bottom: 14px;
+  right: 18px;
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 11px;
+  color: var(--blue-hint);
+  letter-spacing: 1px;
+  opacity: 0.4;
+  z-index: 50;
+  pointer-events: none;
+}
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+<div class="zg-mono">ZG</div>
+
+<div class="page-wrap">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo-mark">
+      <div class="logo-coin">Ð</div>
+      <div class="logo-text">
+        <div class="logo-main">DogeFundMe</div>
+        <div class="logo-sub">Such Golf. Very Real. Wow.</div>
+      </div>
+    </div>
+    <div class="version-tag">v2.0.0</div>
+  </header>
+
+  <!-- FUNDOGE HERO -->
+  <div class="fundoge-hero">
+    <div class="fundoge-hero-inner">
+
+      <div class="hero-copy-col">
+        <div class="fundoge-wordmark">FunDoge</div>
+        <div class="fundoge-tagline">// mini golf. your way. for real.</div>
+        <p class="fundoge-desc">
+          Design your own mini-golf hole. Play it in the browser. Share it with the internet. The best ones get <strong>built for real</strong> — at an actual, community-funded mini-golf course that the DOGE community is constructing one tip at a time.
+          <br><br>
+          Not a whitepaper. Not a promise. A game first. Then a building.
+        </p>
+        <div class="fundoge-status-row">
+          <div class="status-pill building">Game in Development</div>
+          <div class="status-pill arcade">1 Ð Arcade — Coming Soon</div>
+        </div>
+      </div>
+
+      <div class="hero-canvas-col">
+        <div class="pixel-screen">
+          <canvas id="pixel-canvas" width="300" height="240"></canvas>
+        </div>
+        <div class="pixel-screen-label">// preview — game in development</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- GAME PHASE ROADMAP -->
+  <div class="fundoge-phases">
+    <div class="section-eyebrow">// fundoge roadmap</div>
+    <div class="phase-grid">
+
+      <div class="phase-card active-phase">
+        <div class="phase-icon">🐾</div>
+        <div class="phase-num">Phase 1</div>
+        <div class="phase-name">Game Builds</div>
+        <div class="phase-desc">FunDoge browser game in development. Design a hole. Drop obstacles. Set the par. Play it.</div>
+        <div class="phase-target">// now</div>
+      </div>
+
+      <div class="phase-card">
+        <div class="phase-icon">🏆</div>
+        <div class="phase-num">Phase 2</div>
+        <div class="phase-name">Leaderboard Unlocks</div>
+        <div class="phase-desc">Community plays. Top scores are tracked. Best hole designs get featured. The crowd decides what's fun.</div>
+        <div class="phase-target">// when game is playable</div>
+      </div>
+
+      <div class="phase-card">
+        <div class="phase-icon">🕹️</div>
+        <div class="phase-num">Phase 3</div>
+        <div class="phase-name">1 Ð Arcade</div>
+        <div class="phase-desc">Insert 1 Dogecoin. Get your shot at the leaderboard. Every play funds the real course. No other fee. Ever.</div>
+        <div class="phase-target">// 1 doge = 1 play</div>
+      </div>
+
+      <div class="phase-card">
+        <div class="phase-icon">⛳</div>
+        <div class="phase-num">Phase 4</div>
+        <div class="phase-name">Built IRL</div>
+        <div class="phase-desc">Community-funded. Community-designed. The top holes get physically constructed. Your wallet, engraved at the course.</div>
+        <div class="phase-target">// the destination</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ARCADE EXPLAINER -->
+  <div class="arcade-section">
+    <div class="section-eyebrow">// the arcade model</div>
+    <div class="arcade-inner">
+      <div class="arcade-grid">
+
+        <div class="arcade-coin-display">
+          <div class="arcade-coin-big">1Ð</div>
+          <div class="arcade-coin-label">one dogecoin</div>
+          <div class="arcade-insert-label">INSERT COIN TO PLAY</div>
+        </div>
+
+        <div class="arcade-copy">
+          <h2 class="arcade-title">The cheapest<br>arcade in the<br><span>known universe.</span></h2>
+          <p class="arcade-text">
+            We're not charging $5 to play. We're not charging $0.99. We're charging <strong>1 Dogecoin</strong> — the internet's own currency — because that's the whole point.
+          </p>
+          <div class="arcade-rules">
+            <div class="arcade-rule">
+              <span class="arcade-rule-icon">▶</span>
+              <span>1 DOGE buys you one leaderboard attempt on any featured hole.</span>
+            </div>
+            <div class="arcade-rule">
+              <span class="arcade-rule-icon">▶</span>
+              <span>Every play is a contribution to the real course construction fund.</span>
+            </div>
+            <div class="arcade-rule">
+              <span class="arcade-rule-icon">▶</span>
+              <span>Free play is unlimited — only leaderboard runs cost anything.</span>
+            </div>
+            <div class="arcade-rule">
+              <span class="arcade-rule-icon">▶</span>
+              <span>No accounts. No friction. Scan → pay → play. That's it.</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- DESIGN YOUR HOLE -->
+  <div class="design-section">
+    <div class="section-eyebrow">// design your hole</div>
+    <div class="design-inner">
+
+      <div class="design-block featured">
+        <div class="design-block-icon">✏️</div>
+        <div class="design-block-head">// create</div>
+        <div class="design-block-title">Build It Your Way</div>
+        <div class="design-block-text">
+          Drop walls. Add ramps. Place hazards. Set par. Name it. The editor is visual, in-browser, no downloads — same energy as making a meme, except your creation is <strong>a playable golf hole</strong> that the entire internet can try to beat.
+        </div>
+        <div class="coming-soon-badge">▶ Coming Soon</div>
+      </div>
+
+      <div class="design-block featured">
+        <div class="design-block-icon">🌐</div>
+        <div class="design-block-head">// share + compete</div>
+        <div class="design-block-title">Let the Internet Try</div>
+        <div class="design-block-text">
+          Every hole gets a link. Share it anywhere — Twitter, Reddit, Discord, your stream. People play it. Scores go on the board. The holes that survive the internet become candidates for <strong>the IRL course</strong>. The community votes. The best holes get built.
+        </div>
+        <div class="coming-soon-badge">▶ Coming Soon</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- THE DESTINATION -->
+  <div class="destination-section">
+    <div class="section-eyebrow">// the destination</div>
+
+    <div class="iot-hero">
+      <h2 class="iot-title">The internet built a<br><span>meme into a movement.</span><br>Now we build something<br><span>you can walk into.</span></h2>
+      <p class="iot-lead">
+        This started as a joke currency. Then it became the most recognized community in crypto. Now it's funding a real-world destination — a community-designed, DOGE-funded mini-golf course that anyone can visit. <strong>Not a pitch deck. A place.</strong> Built one Dogecoin at a time, one hole at a time, by the people who played the game.
+      </p>
+    </div>
+
+    <!-- IRL Phase roadmap -->
+    <div class="iot-phases">
+      <div class="iot-phase-card active-phase">
+        <div class="phase-num-gold">Phase A</div>
+        <div class="iot-phase-name">Proof of Demand</div>
+        <div class="iot-phase-target">$0 → $250k</div>
+        <div class="iot-phase-desc">Public wallet. Live balance. Transaction feed. Prove the internet wants this — through gameplay, tips, and the guest book.</div>
+      </div>
+      <div class="iot-phase-card">
+        <div class="phase-num-gold">Phase B</div>
+        <div class="iot-phase-name">Land + Legal</div>
+        <div class="iot-phase-target">$250k → $1M</div>
+        <div class="iot-phase-desc">Form a legal entity. Secure land — Nevada or Texas, community vote. Published cost breakdown.</div>
+      </div>
+      <div class="iot-phase-card">
+        <div class="phase-num-gold">Phase C</div>
+        <div class="iot-phase-name">First Build</div>
+        <div class="iot-phase-target">$1M → $3M</div>
+        <div class="iot-phase-desc">9-hole FunDoge course. Top community-designed holes built for real. Founders Wall — contributing wallets engraved permanently.</div>
+      </div>
+      <div class="iot-phase-card">
+        <div class="phase-num-gold">Phase D</div>
+        <div class="iot-phase-name">Expansion</div>
+        <div class="iot-phase-target">$3M+</div>
+        <div class="iot-phase-desc">18 holes. Add a full Fun Center. Restaurant. Live events. The joke becomes a landmark people fly in for.</div>
+      </div>
+    </div>
+
+    <!-- Body blocks -->
+    <div class="iot-body">
+      <div class="iot-block">
+        <div class="iot-block-head">// why this works</div>
+        <div class="iot-block-text">
+          Most projects fail because they demand belief before they provide evidence. This one does the opposite — the game is the proof. Play it. Share it. Fund it. Each step earns the next one.<br><br>
+          <strong>You don't have to believe in the destination before you enjoy the game.</strong> That's the whole design.
+        </div>
+      </div>
+      <div class="iot-block">
+        <div class="iot-block-head">// transparency as foundation</div>
+        <div class="iot-block-text">
+          Every Dogecoin received is publicly verifiable on-chain. Every phase is documented. Every decision is accountable.<br><br>
+          <strong>No anonymous wallets. No hidden fees. No promised ROI.</strong> A public goal and an open ledger.
+        </div>
+      </div>
+      <div class="iot-block">
+        <div class="iot-block-head">// your hole. for real.</div>
+        <div class="iot-block-text">
+          When Phase C hits, the top community-voted holes get <strong>physically built at the course</strong>. Your design. Your name on the placard. Your wallet on the Founders Wall.<br><br>
+          You are not observing this. You are building it.
+        </div>
+      </div>
+      <div class="iot-block">
+        <div class="iot-block-head">// every transaction is a brick</div>
+        <div class="iot-block-text">
+          A tip. A leaderboard play. A shared hole that goes viral. A guestbook signature.<br><br>
+          None of it is small. <strong>All of it is construction.</strong> The course gets built the same way the meme went global — distributed, unstoppable, one contribution at a time.
+        </div>
+      </div>
+    </div>
+
+    <!-- Founders CTA -->
+    <div class="founders-cta">
+      <div class="founders-eyebrow">// be early</div>
+      <h3 class="founders-title">Your wallet.<br><span>Engraved. At the course. Forever.</span></h3>
+      <p class="founders-sub">Every contributor to Phase A earns a permanent place on the Founders Wall — physically engraved at the destination. This is the ledger of people who were here before it was obvious. <span id="founders-social-proof" style="color:var(--gold-bright);"></span></p>
+      <div class="founders-wallet">
+        <span class="founders-wallet-addr" data-full="DU64oNpbRNRCEZdRWN1STN2KWsj7W3Ar4U">DU64oNp…Ar4U</span>
+        <button class="founders-wallet-copy" onclick="copyFoundersWallet()">Copy</button>
+      </div>
+      <div class="founders-stats">
+        <div>
+          <div class="founders-stat-val" id="iot-stat-fund"><span style="font-size:14px;opacity:0.5">loading...</span></div>
+          <div class="founders-stat-label">raised so far</div>
+        </div>
+        <div class="founders-divider"></div>
+        <div>
+          <div class="founders-stat-val">Phase A</div>
+          <div class="founders-stat-label">current phase</div>
+        </div>
+        <div class="founders-divider"></div>
+        <div>
+          <div class="founders-stat-val">Public</div>
+          <div class="founders-stat-label">wallet ledger</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- VISITOR COUNTER -->
+  <div class="counter-section">
+    <div class="counter-card">
+      <div class="counter-eyebrow">// souls who found this place</div>
+      <div class="counter-num" id="counter-num">420</div>
+      <div class="counter-label">visitors and counting</div>
+      <div class="counter-bar">
+        <div class="counter-bar-fill" id="counter-bar-fill"></div>
+      </div>
+      <div class="counter-goal">
+        <span>0</span>
+        <span id="counter-goal-label">goal: 10,000</span>
+        <span>10,000</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- GUEST BOOK -->
+  <div class="guestbook-section" id="guestbook">
+    <div class="guestbook-inner">
+
+      <div class="guestbook-header">
+        <div class="guestbook-title-wrap">
+          <div class="guestbook-ornament">✦ ✦ ✦</div>
+          <div class="guestbook-title">The Guest Book</div>
+          <div class="guestbook-subtitle">FunDoge — Est. 2026</div>
+        </div>
+        <div class="guestbook-count-badge">
+          <div class="guestbook-count-num" id="gb-count">—</div>
+          <div class="guestbook-count-label">signatures</div>
+        </div>
+      </div>
+
+      <div class="guestbook-entries" id="guestbook-entries">
+        <div class="guestbook-entry">
+          <div class="entry-num">#1</div>
+          <div class="entry-body">
+            <div class="entry-name">The Doge Himself</div>
+            <div class="entry-message">"Such hole. Very par. Wow."</div>
+            <div class="entry-meta">April 2026 · Founder</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="guestbook-form-wrap">
+        <div class="gb-form-grid">
+          <input class="gb-input" id="gb-name"   type="text"  placeholder="Your name or alias" maxlength="48">
+          <input class="gb-input" id="gb-wallet" type="text"  placeholder="DOGE wallet (optional)" maxlength="34">
+        </div>
+        <textarea class="gb-textarea" id="gb-message" placeholder="Leave your mark. One entry per visitor — honor system." maxlength="280"></textarea>
+        <div class="gb-submit-row">
+          <div class="gb-hint">Your entry appears on the history page.<br>One signature per person, please.</div>
+          <button class="btn-gb-submit" id="gb-submit-btn" onclick="submitGuestBook()">Sign the Book</button>
+        </div>
+        <a href="./guestbook.html" class="gb-view-all" target="_blank" rel="noopener noreferrer">View all signatures →</a>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /page-wrap -->
+
+<footer>
+  <div class="footer-row">
+    <div class="footer-copy">www.zengine.site | © 2026 Zengine™</div>
+    <a href="https://dogefundme.com" class="footer-link" target="_blank" rel="noopener noreferrer">dogefundme.com</a>
+  </div>
+  <div class="footer-qr-line">
+    Want to be your own DogeFundMe? Generate a free DOGE tip QR at <a href="https://tipstreams.com" target="_blank" rel="noopener noreferrer">TipStreams</a>.
+  </div>
+  <div class="footer-disclaimer">By using this site you confirm you are 18 or older and that cryptocurrency activity is legal in your jurisdiction.</div>
+</footer>
+
+<script>
+// ============================================================
+// DogeFundMe v2.0.0
+// FunDoge pivot — game teaser, pixel canvas, fund balance, guest book
+// Zengine™ | www.zengine.site
+// ============================================================
+//
+// WORKFLOW STACK:
+//   1. DOMContentLoaded → initPixelCanvas() → initCounter()
+//   2. fetchFundBalance() → Dogechain API → #iot-stat-fund
+//   3. updateFoundersSocialProof() → localStorage → #founders-social-proof
+//   4. Guest book → Web3Forms submit → appendGBEntry()
+//
+// ASSET MANIFEST:
+//   - Press Start 2P, Syne, Space Mono: Google Fonts
+//   - countapi.xyz: visitor counter
+//   - dogechain.info: fund balance
+//   - web3forms.com: guest book submissions
+//
+// BOOT ORDER:
+//   DOMContentLoaded → initPixelCanvas → initCounter
+//   → fetchFundBalance → updateFoundersSocialProof
+// ============================================================
+
+// ============================================================
+// PIXEL CANVAS — animated golf hole preview
+// READS: nothing
+// WRITES: #pixel-canvas (rAF loop)
+// DECISION: Pure canvas, no dependencies.
+//   Renders a simple pixel golf hole with bouncing ball.
+//   Green + gold palette to match brand.
+// ============================================================
+var PIXEL = {
+  ball: { x: 80, y: 180, vx: 1.8, vy: -1.2, r: 5 },
+  frame: 0
+};
+
+function initPixelCanvas() {
+  var canvas = document.getElementById('pixel-canvas');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  drawPixelFrame(ctx, canvas.width, canvas.height);
+  requestAnimationFrame(function loop() {
+    PIXEL.frame++;
+    updatePixelBall(canvas.width, canvas.height);
+    drawPixelFrame(ctx, canvas.width, canvas.height);
+    requestAnimationFrame(loop);
+  });
+}
+
+function updatePixelBall(w, h) {
+  // READS: PIXEL.ball
+  // WRITES: PIXEL.ball position
+  var b = PIXEL.ball;
+  b.x += b.vx;
+  b.y += b.vy;
+  // Bounce off walls (accounting for hole walls)
+  if (b.x < 20  || b.x > w - 20) { b.vx *= -1; b.x = Math.max(20, Math.min(w - 20, b.x)); }
+  if (b.y < 30  || b.y > h - 20) { b.vy *= -1; b.y = Math.max(30, Math.min(h - 20, b.y)); }
+  // Bounce off obstacles
+  if (b.x > 110 && b.x < 160 && b.y > 80 && b.y < 100) { b.vy *= -1; }
+  if (b.x > 50  && b.x < 70  && b.y > 130 && b.y < 160) { b.vx *= -1; }
+}
+
+function drawPixelFrame(ctx, w, h) {
+  // READS: PIXEL.ball, PIXEL.frame
+  // WRITES: canvas pixels
+
+  // BG — dark green felt
+  ctx.fillStyle = '#041a06';
+  ctx.fillRect(0, 0, w, h);
+
+  // Felt texture — subtle lighter grid
+  ctx.fillStyle = 'rgba(10,50,14,0.6)';
+  for (var gx = 0; gx < w; gx += 16) {
+    for (var gy = 0; gy < h; gy += 16) {
+      ctx.fillRect(gx, gy, 8, 8);
+    }
+  }
+
+  // Hole boundary — pixelated walls
+  ctx.fillStyle = '#1a3a1e';
+  ctx.fillRect(10, 20, w - 20, h - 30); // fairway
+
+  // Wall borders (pixel-chunky)
+  ctx.fillStyle = '#c9963a';
+  pixelRect(ctx, 10, 20, w - 20, 4);   // top wall
+  pixelRect(ctx, 10, h - 14, w - 20, 4); // bottom wall
+  pixelRect(ctx, 10, 20, 4, h - 34);   // left wall
+  pixelRect(ctx, w - 14, 20, 4, h - 34); // right wall
+
+  // Obstacles
+  ctx.fillStyle = '#8a6020';
+  pixelRect(ctx, 110, 80, 50, 8);  // horizontal barrier
+  pixelRect(ctx, 50, 130, 8, 40);  // vertical post
+
+  // Flag + hole cup
+  var holeX = w - 50, holeY = 40;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(holeX, holeY, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#3d6094';
+  ctx.beginPath();
+  ctx.arc(holeX, holeY, 6, 0, Math.PI * 2);
+  ctx.fill();
+  // Flag pole
+  ctx.fillStyle = '#f0e8d0';
+  ctx.fillRect(holeX, holeY - 22, 2, 20);
+  // Flag
+  ctx.fillStyle = '#39ff14';
+  ctx.fillRect(holeX + 2, holeY - 22, 10, 7);
+
+  // Tee — start point
+  ctx.fillStyle = 'rgba(201,150,58,0.3)';
+  ctx.beginPath();
+  ctx.arc(40, h - 40, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#c9963a';
+  ctx.font = '5px "Press Start 2P", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('TEE', 40, h - 40);
+
+  // Golf ball
+  var b = PIXEL.ball;
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.beginPath();
+  ctx.ellipse(b.x + 2, b.y + 3, b.r + 1, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Ball body
+  ctx.fillStyle = '#f0e8d0';
+  ctx.beginPath();
+  ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+  ctx.fill();
+  // Ball highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.beginPath();
+  ctx.arc(b.x - 1.5, b.y - 1.5, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Ð symbol on ball (tiny)
+  ctx.fillStyle = '#c9963a';
+  ctx.font = 'bold 5px Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('\u00D0', b.x, b.y + 0.5);
+
+  // Score HUD
+  ctx.fillStyle = 'rgba(4,9,26,0.7)';
+  pixelRect(ctx, w - 90, h - 30, 80, 18);
+  ctx.fillStyle = '#39ff14';
+  ctx.font = '6px "Press Start 2P", monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('PAR 3', w - 86, h - 21);
+  ctx.fillStyle = '#f0c060';
+  var shots = Math.floor(PIXEL.frame / 120) % 5;
+  ctx.fillText('SHOT ' + (shots + 1), w - 86 + 42, h - 21);
+}
+
+function pixelRect(ctx, x, y, w, h) {
+  // Helper — draws a chunky pixel-aligned rectangle
+  // READS: ctx, x, y, w, h
+  var px = 4;
+  for (var rx = x; rx < x + w; rx += px) {
+    for (var ry = y; ry < y + h; ry += px) {
+      ctx.fillRect(rx, ry, px - 1, px - 1);
+    }
+  }
+}
+
+// ============================================================
+// VISITOR COUNTER — CountAPI
+// READS: countapi.xyz
+// WRITES: #counter-num, #counter-bar-fill, #counter-goal-label
+// DECISION: 420 floor. localStorage fallback. Exponential backoff.
+// ============================================================
+var COUNTER_GOAL        = 10000;
+var COUNTER_FLOOR       = 420;
+var COUNTER_RETRY_DELAY = 1000;
+var COUNTER_MAX_RETRIES = 4;
+
+function initCounter() {
+  fetchCounterWithRetry(0);
+}
+
+function fetchCounterWithRetry(attempt) {
+  fetch('https://api.countapi.xyz/hit/dogefundme.com/visitors')
+    .then(function(res) {
+      if (!res.ok) throw new Error('CountAPI status ' + res.status);
+      return res.json();
+    })
+    .then(function(data) {
+      var raw   = data.value || 0;
+      var count = Math.max(raw, COUNTER_FLOOR);
+      try { localStorage.setItem('dfm_visitor_count', count); } catch(e) {}
+      animateCounter(count);
+    })
+    .catch(function(err) {
+      console.error('fetchCounterWithRetry:', err);
+      if (attempt < COUNTER_MAX_RETRIES) {
+        setTimeout(function() {
+          fetchCounterWithRetry(attempt + 1);
+        }, COUNTER_RETRY_DELAY * Math.pow(2, attempt));
+      } else {
+        var stored = 0;
+        try { stored = parseInt(localStorage.getItem('dfm_visitor_count') || '0', 10); } catch(e) {}
+        animateCounter(Math.max(stored, COUNTER_FLOOR));
+      }
+    });
+}
+
+function animateCounter(target) {
+  var el       = document.getElementById('counter-num');
+  var bar      = document.getElementById('counter-bar-fill');
+  var goalEl   = document.getElementById('counter-goal-label');
+  var duration = 1400;
+  var startTime = null;
+
+  goalEl.textContent = 'goal: ' + COUNTER_GOAL.toLocaleString();
+
+  function step(ts) {
+    if (!startTime) startTime = ts;
+    var progress = Math.min((ts - startTime) / duration, 1);
+    var eased    = 1 - Math.pow(1 - progress, 3);
+    var current  = Math.round(eased * target);
+    el.textContent = current.toLocaleString();
+    var pct = Math.min((target / COUNTER_GOAL) * 100, 100);
+    bar.style.width = (eased * pct) + '%';
+    if (progress < 1) requestAnimationFrame(step);
+    else {
+      el.textContent = target.toLocaleString();
+      bar.style.width = pct + '%';
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+// ============================================================
+// DOGECHAIN FUND BALANCE
+// READS: dogechain.info public API
+// WRITES: #iot-stat-fund
+// ============================================================
+var FUND_WALLET = 'DU64oNpbRNRCEZdRWN1STN2KWsj7W3Ar4U';
+
+function fetchFundBalance() {
+  var el = document.getElementById('iot-stat-fund');
+  if (!el) return;
+  fetch('https://dogechain.info/api/v1/address/balance/' + FUND_WALLET)
+    .then(function(res) {
+      if (!res.ok) throw new Error('Dogechain status ' + res.status);
+      return res.json();
+    })
+    .then(function(data) {
+      if (data.success && data.balance !== undefined) {
+        var bal = parseFloat(data.balance);
+        var display = bal >= 1000000
+          ? (bal / 1000000).toFixed(2) + 'M Ð'
+          : bal >= 1000
+          ? (bal / 1000).toFixed(1) + 'k Ð'
+          : bal.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' Ð';
+        el.textContent = display;
+      } else {
+        el.textContent = '—';
+      }
+    })
+    .catch(function(err) {
+      console.error('fetchFundBalance:', err);
+      el.textContent = '—';
+    });
+}
+
+// ============================================================
+// FOUNDERS SOCIAL PROOF
+// READS: localStorage dfm_guestbook_entries
+// WRITES: #founders-social-proof
+// ============================================================
+function updateFoundersSocialProof() {
+  var el = document.getElementById('founders-social-proof');
+  if (!el) return;
+  var stored = 0;
+  try {
+    var raw = localStorage.getItem('dfm_guestbook_entries');
+    if (raw) stored = JSON.parse(raw).length;
+  } catch(e) {}
+  var total = stored + 1;
+  if (total > 1) {
+    el.textContent = 'Join ' + total + ' others already in the book.';
+  }
+}
+
+// ============================================================
+// FOUNDERS WALLET COPY
+// READS: .founders-wallet-addr[data-full]
+// WRITES: clipboard
+// ============================================================
+function copyFoundersWallet() {
+  var el   = document.querySelector('.founders-wallet-addr');
+  var addr = el ? (el.getAttribute('data-full') || el.textContent) : FUND_WALLET;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(addr)
+      .then(function() { showToast('Founders wallet copied'); })
+      .catch(function() { fallbackCopy(addr); });
+  } else {
+    fallbackCopy(addr);
+  }
+}
+
+// ============================================================
+// GUEST BOOK — Web3Forms
+// READS: #gb-name, #gb-wallet, #gb-message
+// WRITES: Web3Forms submit, localStorage, DOM entry list
+// DECISION: access_key placeholder — replace with real key from web3forms.com
+// ============================================================
+var GB_SUBMITTED = false;
+
+function submitGuestBook() {
+  var name    = document.getElementById('gb-name').value.trim();
+  var wallet  = document.getElementById('gb-wallet').value.trim();
+  var message = document.getElementById('gb-message').value.trim();
+
+  if (!name)    { showToast('Please enter your name'); return; }
+  if (!message) { showToast('Please leave a message'); return; }
+  if (wallet && !isValidDoge(wallet)) { showToast('Wallet looks invalid — leave blank to skip'); return; }
+  if (GB_SUBMITTED) { showToast('You\'ve already signed — thank you'); return; }
+  if (message.length > 280) { showToast('Message too long — max 280 chars'); return; }
+
+  var btn = document.getElementById('gb-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Signing...';
+
+  var payload = {
+    access_key: 'YOUR_WEB3FORMS_KEY',
+    subject:    'FunDoge Guest Book — ' + name,
+    name:       name,
+    message:    message,
+    wallet:     wallet || '(not provided)',
+    from_name:  'FunDoge Guest Book'
+  };
+
+  fetch('https://api.web3forms.com/submit', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(payload)
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    if (data.success) {
+      GB_SUBMITTED = true;
+      appendGBEntry(name, message, wallet);
+      document.getElementById('gb-name').value    = '';
+      document.getElementById('gb-wallet').value  = '';
+      document.getElementById('gb-message').value = '';
+      btn.textContent = 'Signed ✓';
+      updateFoundersSocialProof();
+      showToast('Welcome to the book 🐕');
+    } else {
+      console.error('submitGuestBook Web3Forms:', data);
+      btn.disabled = false;
+      btn.textContent = 'Sign the Book';
+      showToast('Submission failed — try again');
+    }
+  })
+  .catch(function(err) {
+    console.error('submitGuestBook:', err);
+    btn.disabled = false;
+    btn.textContent = 'Sign the Book';
+    showToast('Network error — check connection');
+  });
+}
+
+function appendGBEntry(name, message, wallet) {
+  // READS: #guestbook-entries
+  // WRITES: DOM, localStorage
+  var entries  = document.getElementById('guestbook-entries');
+  var countEl  = document.getElementById('gb-count');
+  var existing = entries.querySelectorAll('.guestbook-entry').length;
+  var num      = existing + 1;
+  var now      = new Date();
+  var months   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var dateStr  = months[now.getMonth()] + ' ' + now.getFullYear();
+
+  try {
+    var stored = JSON.parse(localStorage.getItem('dfm_guestbook_entries') || '[]');
+    stored.push({ name: name, message: message, wallet: wallet || null, date: dateStr });
+    localStorage.setItem('dfm_guestbook_entries', JSON.stringify(stored));
+  } catch(e) { console.error('appendGBEntry localStorage:', e); }
+
+  var entry = document.createElement('div');
+  entry.className = 'guestbook-entry';
+  var walletLine = wallet
+    ? '<div class="entry-wallet">' + wallet.slice(0,8) + '…' + wallet.slice(-6) + '</div>'
+    : '';
+  entry.innerHTML =
+    '<div class="entry-num">#' + num + '</div>' +
+    '<div class="entry-body">' +
+      '<div class="entry-name">' + escapeHtml(name) + '</div>' +
+      '<div class="entry-message">&ldquo;' + escapeHtml(message) + '&rdquo;</div>' +
+      '<div class="entry-meta">' + dateStr + '</div>' +
+      walletLine +
+    '</div>';
+
+  entries.appendChild(entry);
+  entries.scrollTop = entries.scrollHeight;
+  countEl.textContent = num;
+}
+
+// ============================================================
+// UTILITIES
+// ============================================================
+function isValidDoge(address) {
+  if (typeof address !== 'string') return false;
+  return /^D[1-9A-HJ-NP-Za-km-z]{25,33}$/.test(address.trim());
+}
+
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function fallbackCopy(text) {
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.top = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); showToast('Copied'); }
+  catch(e) { showToast('Copy failed — try manually'); }
+  document.body.removeChild(ta);
+}
+
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function() { t.classList.remove('show'); }, 2800);
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+  initPixelCanvas();
+  initCounter();
+  fetchFundBalance();
+  updateFoundersSocialProof();
+  // DECISION: No wallet input listeners — QR generator removed in v2.0.0
+  console.log('FunDoge v2.0.0 booted');
+});
+</script>
+</body>
+</html>
