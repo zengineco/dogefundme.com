@@ -3,1284 +3,1781 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>FunDoge — Such Golf. Very Real. Wow.</title>
+<title>FunDoge — Such Golf. Very Iso. Wow.</title>
 <!-- ca-pub-8826956454892311 -->
 <!--
 // ============================================================
 // Author: Vincent Gonzalez | © 2026 Zengine™ | www.zengine.site
 // Project: FunDoge
-// File: fundoge_game_v2.0.2.html
-// Version: 2.0.2
+// File: fundoge_game_v5.0.0.html
+// Version: 5.1.0
+// CHANGE LOG v5.0.0 → v5.1.0
+//   - ADDED: 4-angle iso rotation (R key or rotate button, instant)
+//   - ADDED: Block-by-block level editor (E key toggle)
+//   - ADDED: Editor toolbar — paint tiles, place obstacles, set tee/cup
+//   - ADDED: Share hole — base64 encode/decode hole code
+//   - ADDED: Load hole from code — paste & play
+//   - DECISION: Rotation = 4 projection matrices, physics unchanged
+//   - DECISION: Editor grid 12x9 default, expandable
 // ------------------------------------------------------------
-// CHANGE LOG v2.0.1 → v2.0.2
-//   - TUNED: Speed 11 → 14 (midpoint between too fast/too slow)
-//   - TUNED: Friction restored to 0.986
-//   - SCRAPPED: Isometric projection — root cause of all physics/visibility failures
-//   - REBUILT: Flat top-down 2D renderer — ball can never escape the course
-//   - REBUILT: Visual theme — bright green felt, wood walls, sunny arcade look
-//   - REBUILT: Physics — simple 2D AABB + circle vs rect wall collision, always contained
-//   - REBUILT: Shot mechanic — drag from anywhere, arrow shows direction + power
-//   - REBUILT: All 9 holes as 2D polygon courses (grid-tile based)
-//   - ADDED: Pause menu with Restart Hole option
-//   - ADDED: Meme speech bubbles (birdie, eagle, bogey reactions)
-//   - ADDED: Bright gold Ð coin ball — always visible
-//   - ADDED: Shibe mascot corner art (canvas drawn)
-//   - ADDED: Hole name + par banner on load
-//   - DECISION: Top-down chosen — matches AI reference image, physics trivially correct
-//   - DECISION: Drag from anywhere (not just on ball) — more forgiving on mobile
-// ------------------------------------------------------------
-// WORKFLOW STACK:
-//   1. Boot → resizeCanvas → loadHole(0) → gameLoop
-//   2. Input → pointerdown → drag → pointerup → shoot
-//   3. rAF → update(physics) → draw
-//   4. Ball enters cup → holeComplete → scorecard
-// ------------------------------------------------------------
-// ASSET MANIFEST:
-//   - Press Start 2P: Google Fonts (pixel font)
-//   - All art: procedural canvas drawing
-// ------------------------------------------------------------
-// BOOT ORDER:
-//   DOMContentLoaded → resizeCanvas → loadHole(0) → gameLoop
+// CHANGE LOG v4.2.1 → v5.0.0
+//   - FULL REBUILD: Classic 2:1 isometric engine
+//   - ARCHITECTURE: Physics in flat 2D world space (proven)
+//     Rendering via worldToIso(x,y) projection only
+//     Input via isoToWorld(sx,sy) inverse for drag
+//   - ADDED: 9 unique holes — L, Z, T, dogleg, island, spiral,
+//     S-curve, gauntlet shapes
+//   - ADDED: Tile types — tee, fairway, rough, sand, water, green
+//   - ADDED: Obstacles — tree, windmill, bridge, funnel/pipe, shibe
+//   - ADDED: Water hazard — ball resets to last dry position
+//   - ADDED: Sand — 0.2x friction multiplier
+//   - ADDED: Bridge — ball slides over water on bridge tiles
+//   - ADDED: Funnel/pipe — redirect + teleport
+//   - ADDED: Detailed iso tile rendering — shaded faces, texture
+//   - DECISION: Tiles are TSIZE world units. Grid stored as 2D array.
+//     Each cell: tile type + optional obstacle ref.
+//   - DECISION: Drag-anywhere input retained from v4.2.1
+//   - DECISION: Painter's algorithm for iso draw order (x+y sort)
 // ============================================================
 -->
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
-* { margin:0; padding:0; box-sizing:border-box; }
-html, body { width:100%; height:100%; overflow:hidden; background:#1a8c2a; }
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a1a08;font-family:'Press Start 2P',monospace;touch-action:none;user-select:none;}
+#c{position:fixed;top:0;left:0;width:100%;height:100%;display:block;touch-action:none;cursor:none;}
+#hud{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:6px 16px;background:rgba(8,20,6,0.94);border-bottom:3px solid #1a4a10;pointer-events:none;}
+.hb{font-size:11px;color:#f0c060;text-shadow:2px 2px 0 #6a3a00;}
+.hm{display:flex;flex-direction:column;align-items:center;gap:2px;}
+.hh{font-size:7px;color:#c8f0c8;letter-spacing:1px;}
+.hs{font-size:10px;color:#39ff14;text-shadow:0 0 8px rgba(57,255,20,0.5);}
+.hr{display:flex;flex-direction:column;align-items:flex-end;gap:2px;}
+.hp{font-size:7px;color:#c8f0c8;}
+.ht{font-size:7px;color:#f0c060;}
+#hint{position:fixed;bottom:12px;left:16px;font-size:7px;color:#c8f0c8;z-index:20;animation:blink 1.4s step-end infinite;pointer-events:none;}
+#pbtn{position:fixed;bottom:10px;right:14px;font-size:7px;color:#c8f0c8;cursor:pointer;padding:6px 10px;border:1px solid #2a9a3a;border-radius:2px;background:rgba(8,24,6,0.92);z-index:20;}
+#rbtn{position:fixed;bottom:10px;right:64px;font-size:7px;color:#c8f0c8;cursor:pointer;padding:6px 10px;border:1px solid #2a6a9a;border-radius:2px;background:rgba(6,16,24,0.92);z-index:20;}
+#ebtn{position:fixed;bottom:10px;right:120px;font-size:7px;color:#c8f0c8;cursor:pointer;padding:6px 10px;border:1px solid #9a6a2a;border-radius:2px;background:rgba(20,14,6,0.92);z-index:20;}
 
-body {
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  font-family:'Press Start 2P', monospace;
-  touch-action:none;
-  user-select:none;
-}
-
-/* ── TOP HUD ── */
-#hud {
-  width:100%;
-  max-width:520px;
-  background:#1a6e28;
-  border-bottom:3px solid #0d4a18;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:6px 12px;
-  flex-shrink:0;
-  box-shadow:0 2px 0 #0d4a18;
-}
-.hud-left  { display:flex; flex-direction:column; gap:3px; }
-.hud-title { font-size:10px; color:#f0c060; text-shadow:2px 2px 0 #8a4a00; letter-spacing:1px; }
-.hud-hole  { font-size:7px;  color:#c8f0c8; letter-spacing:1px; }
-.hud-right { display:flex; flex-direction:column; align-items:flex-end; gap:3px; }
-.hud-par   { font-size:7px;  color:#c8f0c8; letter-spacing:1px; }
-.hud-strokes { font-size:9px; color:#39ff14; text-shadow:0 0 8px rgba(57,255,20,0.6); }
-
-/* ── CANVAS WRAP ── */
-#canvas-wrap {
-  width:100%;
-  max-width:520px;
-  flex:1;
-  position:relative;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  overflow:hidden;
-}
-#game-canvas {
-  display:block;
-  cursor:crosshair;
-  image-rendering:pixelated;
-  image-rendering:crisp-edges;
-  touch-action:none;
-}
-
-/* ── BOTTOM HUD ── */
-#hud-bottom {
-  width:100%;
-  max-width:520px;
-  background:#1a6e28;
-  border-top:3px solid #0d4a18;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:5px 12px;
-  flex-shrink:0;
-}
-.hud-total  { font-size:7px; color:#f0c060; letter-spacing:1px; }
-.hud-hint   { font-size:6px; color:#c8f0c8; letter-spacing:0.5px; animation:blink 1.4s step-end infinite; }
-.hud-pause  { font-size:7px; color:#c8f0c8; cursor:pointer; padding:4px 8px;
-              border:1px solid #2a9a3a; border-radius:2px; background:#1a5a22; }
-.hud-pause:hover { background:#2a8a32; }
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
-
-/* ── OVERLAYS ── */
-.overlay {
-  position:fixed; inset:0;
-  display:flex; align-items:center; justify-content:center;
-  z-index:100;
-  background:rgba(0,30,5,0.82);
-}
-.overlay-box {
-  background:#0d3a10;
-  border:4px solid #f0c060;
-  border-radius:6px;
-  padding:24px 28px;
-  text-align:center;
-  max-width:340px;
-  width:90%;
-  box-shadow:0 0 0 2px #8a6020, 0 8px 32px rgba(0,0,0,0.6);
-}
-.ov-title  { font-size:16px; color:#f0c060; text-shadow:3px 3px 0 #8a4a00; margin-bottom:10px; letter-spacing:1px; }
-.ov-sub    { font-size:7px;  color:#c8f0c8; line-height:2.2; margin-bottom:18px; letter-spacing:0.5px; }
-.ov-btn {
-  font-family:'Press Start 2P',monospace;
-  font-size:9px; cursor:pointer;
-  padding:11px 20px; margin:4px;
-  border:none; border-radius:3px;
-  letter-spacing:1px;
-}
-.ov-btn.primary   { background:#f0c060; color:#0d3a10; box-shadow:0 3px 0 #8a6020; }
-.ov-btn.primary:hover   { background:#ffe080; }
-.ov-btn.secondary { background:#1a5a22; color:#c8f0c8; border:2px solid #2a9a3a; box-shadow:0 3px 0 #0d4a18; }
-.ov-btn.secondary:hover { background:#2a7a32; }
-.ov-btn.danger    { background:#c0392b; color:#fff; box-shadow:0 3px 0 #7a1a10; }
-.ov-btn.danger:hover    { background:#e04030; }
-
-/* Scorecard */
-.sc-table { width:100%; border-collapse:collapse; margin:10px 0; font-size:6px; }
-.sc-table th { color:#8a9a88; padding:3px 6px; border-bottom:1px solid #1a5a22; letter-spacing:0.5px; }
-.sc-table td { color:#c8f0c8; padding:4px 6px; border-bottom:1px solid #0d3a10; text-align:center; }
-.sc-name     { text-align:left!important; color:#a8c0a8; }
-.sc-under    { color:#39ff14; }
-.sc-over     { color:#ff6b4a; }
-.sc-even     { color:#c8f0c8; }
-
-/* Speech bubble */
-#speech {
-  position:fixed; top:18%; left:50%; transform:translateX(-50%);
-  background:#fff; color:#0d3a10;
-  border:3px solid #0d3a10; border-radius:8px;
-  padding:8px 16px; font-size:10px; letter-spacing:1px;
-  pointer-events:none; z-index:80;
-  opacity:0; transition:opacity 0.2s;
-  white-space:nowrap;
-  box-shadow:3px 3px 0 #0d3a10;
-}
-#speech.show { opacity:1; }
-#speech::after {
-  content:''; position:absolute; bottom:-12px; left:50%; transform:translateX(-50%);
-  border:6px solid transparent; border-top-color:#0d3a10;
-}
-
-/* Hole intro banner */
-#hole-banner {
-  position:fixed; top:0; left:0; right:0;
-  display:flex; align-items:center; justify-content:center;
-  flex-direction:column; gap:6px;
-  padding:18px;
-  background:rgba(13,58,16,0.92);
-  border-bottom:3px solid #f0c060;
-  z-index:60;
-  transform:translateY(-100%);
-  transition:transform 0.3s;
-}
-#hole-banner.show { transform:translateY(0); }
-.banner-num  { font-size:8px;  color:#8aaa88; letter-spacing:2px; }
-.banner-name { font-size:15px; color:#f0c060; text-shadow:2px 2px 0 #8a4a00; letter-spacing:1px; }
-.banner-par  { font-size:8px;  color:#c8f0c8; }
-
-/* ZG monogram */
-#zg { position:fixed; bottom:10px; right:12px; font-size:7px; color:rgba(200,240,200,0.2); pointer-events:none; z-index:5; }
+/* EDITOR UI */
+#editor-ui{position:fixed;top:HUD_PX;left:0;right:0;bottom:0;z-index:30;display:none;pointer-events:none;}
+#editor-ui.active{display:block;}
+#editor-toolbar{position:fixed;top:48px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:6px;padding:8px 14px;background:rgba(8,16,6,0.96);border:2px solid #9a6a2a;border-radius:6px;z-index:35;pointer-events:auto;flex-wrap:wrap;justify-content:center;max-width:98vw;}
+.etool{font-family:'Press Start 2P',monospace;font-size:6px;cursor:pointer;padding:6px 8px;border:2px solid transparent;border-radius:3px;transition:all .15s;white-space:nowrap;}
+.etool:hover{border-color:#f0c060;}
+.etool.active-tool{border-color:#f0c060;box-shadow:0 0 8px rgba(240,192,96,0.4);}
+.etool-swatch{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:middle;margin-right:4px;border:1px solid rgba(255,255,255,0.3);}
+#editor-actions{position:fixed;bottom:40px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:35;pointer-events:auto;}
+#share-modal{position:fixed;inset:0;background:rgba(0,16,2,.88);display:none;align-items:center;justify-content:center;z-index:200;}
+#share-modal.open{display:flex;}
+#share-box{background:#0a2008;border:3px solid #f0c060;border-radius:6px;padding:24px;max-width:480px;width:92%;text-align:center;}
+#share-code{width:100%;background:#050e04;border:1px solid #2a4a28;color:#39ff14;font-family:'Press Start 2P',monospace;font-size:7px;padding:10px;margin:12px 0;border-radius:3px;word-break:break-all;resize:none;height:80px;}
+#editor-crosshair{position:fixed;pointer-events:none;z-index:32;display:none;}
+#editor-crosshair.active{display:block;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+#speech{position:fixed;top:68px;left:50%;transform:translateX(-50%);background:#fff;color:#0a2008;border:3px solid #0a2008;border-radius:8px;padding:9px 18px;font-size:10px;letter-spacing:1px;pointer-events:none;z-index:80;opacity:0;transition:opacity .18s;white-space:nowrap;box-shadow:3px 3px 0 #0a2008;}
+#speech.show{opacity:1;}
+#speech::after{content:'';position:absolute;bottom:-12px;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:#0a2008;}
+#banner{position:fixed;top:0;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:5px;padding:18px;background:rgba(8,20,6,0.96);border-bottom:3px solid #f0c060;z-index:60;transform:translateY(-100%);transition:transform .28s;}
+#banner.show{transform:translateY(0);}
+.bn{font-size:7px;color:#8aaa88;letter-spacing:2px;}
+.bname{font-size:16px;color:#f0c060;text-shadow:2px 2px 0 #8a4a00;}
+.bpar{font-size:8px;color:#c8f0c8;}
+.ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:100;background:rgba(0,16,2,.88);}
+.ob{background:#0a2008;border:4px solid #f0c060;border-radius:6px;padding:26px 30px;text-align:center;max-width:380px;width:92%;box-shadow:0 0 0 2px #7a5010,0 12px 48px rgba(0,0,0,.7);}
+.oh{font-size:16px;color:#f0c060;text-shadow:3px 3px 0 #8a4a00;margin-bottom:10px;}
+.os{font-size:7px;color:#c8f0c8;line-height:2.3;margin-bottom:18px;}
+.btn{font-family:'Press Start 2P',monospace;font-size:9px;cursor:pointer;padding:11px 20px;margin:4px;border:none;border-radius:3px;letter-spacing:1px;}
+.bp{background:#f0c060;color:#0a2008;box-shadow:0 3px 0 #8a6020;}.bp:hover{background:#ffe080;}
+.bs{background:#1a4a18;color:#c8f0c8;border:2px solid #2a8a3a;}.bs:hover{background:#2a6a28;}
+.bd{background:#c0392b;color:#fff;box-shadow:0 3px 0 #7a1a10;}.bd:hover{background:#e04030;}
+.sct{width:100%;border-collapse:collapse;margin:10px 0;font-size:6px;}
+.sct th{color:#8a9a88;padding:3px 6px;border-bottom:1px solid #1a4a18;}
+.sct td{color:#c8f0c8;padding:4px 6px;border-bottom:1px solid #0a2008;text-align:center;}
+.scn{text-align:left!important;color:#a8c0a8;font-size:5px;}
+.scu{color:#39ff14;}.sco{color:#ff6b4a;}
+#zg{position:fixed;bottom:10px;right:64px;font-size:7px;color:rgba(200,240,200,.15);pointer-events:none;z-index:5;}
 </style>
 </head>
 <body>
-
+<canvas id="c"></canvas>
 <div id="hud">
-  <div class="hud-left">
-    <div class="hud-title">FunDoge!</div>
-    <div class="hud-hole" id="hud-hole">HOLE 1 / 9</div>
+  <div class="hb">FunDoge!</div>
+  <div class="hm"><div class="hh" id="hh">HOLE 1 / 9</div><div class="hs" id="hs">0 STROKES</div></div>
+  <div class="hr"><div class="hp" id="hp">PAR 3</div><div class="ht" id="ht">TOT: E</div></div>
+</div>
+<div id="hint">DRAG ANYWHERE · RELEASE TO SHOOT</div>
+<div id="pbtn" onclick="togglePause()">⏸</div>
+<div id="rbtn" onclick="rotateView()" title="Rotate view (R)">↻ ROT</div>
+<div id="ebtn" onclick="toggleEditor()" title="Level editor (E)">✏️ EDIT</div>
+
+<!-- EDITOR UI -->
+<div id="editor-ui">
+  <div id="editor-toolbar">
+    <span style="font-size:6px;color:#f0c060;font-family:'Press Start 2P',monospace;margin-right:4px;">PAINT:</span>
+    <div class="etool active-tool" id="et-fair"   onclick="setEditorTool('tile','fair')"  style="background:#3a9830;color:#fff"><span class="etool-swatch" style="background:#4ab840"></span>FAIR</div>
+    <div class="etool" id="et-rough"  onclick="setEditorTool('tile','rough')" style="background:#226010;color:#c8f0c8"><span class="etool-swatch" style="background:#2a7020"></span>ROUGH</div>
+    <div class="etool" id="et-sand"   onclick="setEditorTool('tile','sand')"  style="background:#b89840;color:#fff"><span class="etool-swatch" style="background:#e8d890"></span>SAND</div>
+    <div class="etool" id="et-water"  onclick="setEditorTool('tile','water')" style="background:#1050a0;color:#fff"><span class="etool-swatch" style="background:#2060c0"></span>WATER</div>
+    <div class="etool" id="et-green"  onclick="setEditorTool('tile','green')" style="background:#4ab030;color:#fff"><span class="etool-swatch" style="background:#8ae870"></span>GREEN</div>
+    <div class="etool" id="et-bridge" onclick="setEditorTool('tile','bridge')" style="background:#806030;color:#fff"><span class="etool-swatch" style="background:#c8a870"></span>BRIDGE</div>
+    <div class="etool" id="et-tee"    onclick="setEditorTool('tile','tee')"   style="background:#4aaa38;color:#fff"><span class="etool-swatch" style="background:#6ad060"></span>TEE</div>
+    <div class="etool" id="et-void"   onclick="setEditorTool('tile','void')"  style="background:#0a1a08;color:#666"><span class="etool-swatch" style="background:#0a1a08;border-color:#333"></span>ERASE</div>
+    <span style="font-size:6px;color:#aaa;font-family:'Press Start 2P',monospace;margin:0 4px;">|</span>
+    <div class="etool" id="et-settee" onclick="setEditorTool('settee','')"    style="background:#1a3a10;color:#39ff14">SET TEE</div>
+    <div class="etool" id="et-setcup" onclick="setEditorTool('setcup','')"    style="background:#1a1a3a;color:#6060ff">SET CUP</div>
+    <span style="font-size:6px;color:#aaa;font-family:'Press Start 2P',monospace;margin:0 4px;">|</span>
+    <div class="etool" id="et-tree"   onclick="setEditorTool('obs','tree')"   style="background:#1a4a10;color:#6ad060">🌲 TREE</div>
+    <div class="etool" id="et-wind"   onclick="setEditorTool('obs','windmill')" style="background:#3a2a10;color:#f0c060">⚙️ MILL</div>
+    <div class="etool" id="et-shibe"  onclick="setEditorTool('obs','shibe')"  style="background:#3a2000;color:#f0a030">🐕 SHIBE</div>
+    <div class="etool" id="et-pipein" onclick="setEditorTool('obs','pipeIn')" style="background:#002a3a;color:#00e5ff">IN PIPE</div>
+    <div class="etool" id="et-pipeout" onclick="setEditorTool('obs','pipeOut')" style="background:#2a002a;color:#ff4081">OUT PIPE</div>
+    <div class="etool" id="et-delobs" onclick="setEditorTool('delobs','')"    style="background:#3a0a0a;color:#ff6060">DEL OBS</div>
   </div>
-  <div class="hud-right">
-    <div class="hud-par" id="hud-par">PAR 2</div>
-    <div class="hud-strokes" id="hud-strokes">0 STROKES</div>
+  <div id="editor-actions">
+    <button class="btn bs" onclick="editorClear()" style="font-size:7px">CLEAR</button>
+    <button class="btn bs" onclick="editorResize()" style="font-size:7px">RESIZE</button>
+    <button class="btn bp" onclick="shareHole()" style="font-size:7px">SHARE CODE</button>
+    <button class="btn bp" onclick="loadFromCode()" style="font-size:7px">LOAD CODE</button>
+    <button class="btn bd" onclick="playEditorHole()" style="font-size:7px">▶ PLAY THIS HOLE</button>
   </div>
 </div>
 
-<div id="canvas-wrap">
-  <canvas id="game-canvas"></canvas>
+<!-- SHARE MODAL -->
+<div id="share-modal">
+  <div id="share-box">
+    <div style="font-size:10px;color:#f0c060;font-family:'Press Start 2P',monospace;margin-bottom:8px">HOLE CODE</div>
+    <div style="font-size:6px;color:#c8f0c8;font-family:'Press Start 2P',monospace;margin-bottom:4px">COPY THIS CODE · SHARE IT · PASTE TO LOAD</div>
+    <textarea id="share-code" readonly></textarea>
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+      <button class="btn bp" onclick="copyHoleCode()" style="font-size:7px">COPY</button>
+      <button class="btn bs" onclick="closeShareModal()" style="font-size:7px">CLOSE</button>
+    </div>
+  </div>
 </div>
-
-<div id="hud-bottom">
-  <div class="hud-total" id="hud-total">TOTAL: E</div>
-  <div class="hud-hint" id="hud-hint">DRAG TO AIM</div>
-  <div class="hud-pause" onclick="togglePause()">⏸ PAUSE</div>
-</div>
-
-<div id="hole-banner">
-  <div class="banner-num"  id="banner-num">HOLE 1</div>
-  <div class="banner-name" id="banner-name">SUCH START</div>
-  <div class="banner-par"  id="banner-par">PAR 2</div>
-</div>
-
 <div id="speech"></div>
 <div id="zg">ZG</div>
+<div id="banner"><div class="bn" id="bn">HOLE 1 OF 9</div><div class="bname" id="bname">SUCH START</div><div class="bpar" id="bpar">PAR 3</div></div>
 
-<!-- TITLE -->
-<div class="overlay" id="ov-title">
-  <div class="overlay-box">
-    <div class="ov-title">FunDoge!</div>
-    <div class="ov-sub">
-      SUCH GOLF · VERY REAL · WOW<br><br>
-      9 HOLES · PAR 29<br><br>
-      DRAG BACK FROM BALL.<br>
-      RELEASE TO SHOOT.
-    </div>
-    <button class="ov-btn primary" onclick="startGame()">▶ PLAY NOW</button><br>
-    <a href="https://dogefundme.com" style="text-decoration:none">
-      <button class="ov-btn secondary" style="margin-top:8px;font-size:6px">DOGEFUNDME.COM</button>
-    </a>
+<div class="ov" id="ov-title">
+  <div class="ob">
+    <div class="oh">FunDoge!</div>
+    <div class="os">SUCH ISO · VERY GOLF · WOW<br><br>9 HOLES · AIR HOCKEY PHYSICS<br>DRAG ANYWHERE TO AIM<br>RELEASE TO SHOOT<br><br>WATCH FOR WATER · SAND BITES<br>TREES BLOCK · PIPES TELEPORT</div>
+    <button class="btn bp" onclick="startGame()">▶ PLAY NOW</button><br>
+    <a href="https://dogefundme.com" style="text-decoration:none"><button class="btn bs" style="margin-top:8px;font-size:6px">DOGEFUNDME.COM</button></a>
   </div>
 </div>
-
-<!-- PAUSE -->
-<div class="overlay" id="ov-pause" style="display:none">
-  <div class="overlay-box">
-    <div class="ov-title">PAUSED</div>
-    <div class="ov-sub">TAKE A BREATH.<br>MUCH CALM. VERY ZEN.</div>
-    <button class="ov-btn primary"   onclick="togglePause()">▶ RESUME</button><br>
-    <button class="ov-btn secondary" onclick="restartHole()" style="margin-top:8px">↺ RESTART HOLE</button><br>
-    <button class="ov-btn danger"    onclick="restartGame()" style="margin-top:8px">⟳ NEW GAME</button>
+<div class="ov" id="ov-pause" style="display:none">
+  <div class="ob">
+    <div class="oh">PAUSED</div>
+    <div class="os">MUCH CALM. VERY ZEN.</div>
+    <button class="btn bp" onclick="togglePause()">▶ RESUME</button><br>
+    <button class="btn bs" onclick="restartHole()" style="margin-top:8px">↺ RESTART HOLE</button><br>
+    <button class="btn bd" onclick="restartGame()" style="margin-top:8px">⟳ NEW GAME</button>
   </div>
 </div>
-
-<!-- HOLE COMPLETE -->
-<div class="overlay" id="ov-hole" style="display:none">
-  <div class="overlay-box">
-    <div class="ov-title" id="hc-emoji">⛳</div>
-    <div class="ov-title" id="hc-title" style="font-size:13px;margin-bottom:8px"></div>
-    <div class="ov-sub"   id="hc-sub"></div>
-    <button class="ov-btn primary" id="hc-btn" onclick="nextHole()">NEXT HOLE →</button>
+<div class="ov" id="ov-hole" style="display:none">
+  <div class="ob">
+    <div class="oh" id="hce">⛳</div>
+    <div class="oh" id="hct" style="font-size:13px;margin-bottom:8px"></div>
+    <div class="os" id="hcs"></div>
+    <button class="btn bp" id="hcb">NEXT →</button>
   </div>
 </div>
-
-<!-- SCORECARD -->
-<div class="overlay" id="ov-scorecard" style="display:none">
-  <div class="overlay-box" style="max-width:400px">
-    <div class="ov-title">SCORECARD</div>
-    <table class="sc-table" id="sc-table"></table>
-    <div id="sc-verdict" style="font-size:9px;color:#f0c060;margin:12px 0 4px"></div>
-    <div id="sc-msg"     style="font-size:6px;color:#8aaa88;margin-bottom:16px"></div>
-    <button class="ov-btn primary"   onclick="restartGame()">▶ PLAY AGAIN</button>
-    <a href="https://dogefundme.com" style="text-decoration:none">
-      <button class="ov-btn secondary" style="margin-top:6px;font-size:6px">DOGEFUNDME.COM</button>
-    </a>
+<div class="ov" id="ov-score" style="display:none">
+  <div class="ob" style="max-width:440px">
+    <div class="oh">SCORECARD</div>
+    <table class="sct" id="sct"></table>
+    <div id="scv" style="font-size:9px;color:#f0c060;margin:12px 0 4px"></div>
+    <div id="scm" style="font-size:6px;color:#8aaa88;margin-bottom:16px"></div>
+    <button class="btn bp" onclick="restartGame()">▶ PLAY AGAIN</button>
+    <a href="https://dogefundme.com" style="text-decoration:none"><button class="btn bs" style="margin-top:6px;font-size:6px">DOGEFUNDME.COM</button></a>
   </div>
 </div>
 
 <script>
 // ============================================================
-// FunDoge v2.0.0 — Top-Down 2D Mini-Golf
+// FunDoge v5.0.0 — Isometric Mini-Golf Engine
 // Zengine™ | www.zengine.site
 // ============================================================
+
+var canvas = document.getElementById('c');
+var ctx    = canvas.getContext('2d');
+var VW=0, VH=0, HUD=42;
+
+function resize() {
+  VW=window.innerWidth; VH=window.innerHeight;
+  canvas.width=VW; canvas.height=VH;
+  if (G.active) { buildHole(G.holeIdx); respawnBall(); }
+}
+
+// ============================================================
+// ISO PROJECTION  — Classic 2:1
+// World (wx,wy) are grid coords (not pixels).
+// TILE = world units per grid cell.
+// Screen origin offset: ISO_OX, ISO_OY (set per hole)
+// ============================================================
+var TILE   = 1;       // 1 world unit = 1 grid cell
+var TW     = 64;      // tile face width  px (screen)
+var TH     = 32;      // tile face height px (screen) — 2:1 ratio
+var TILE_DEPTH = 18;  // wall height px
+var ISO_OX = 0;
+var ISO_OY = 0;
+
+// w2s and s2w defined in ROTATION SYSTEM below
+function w2tmp(wx,wy){return{x:(wx-wy)*TW/2,y:(wx+wy)*TH/2};}
+  // Center the hole grid on screen
+  // Find bounding box of all tiles
+  var minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+  hole.grid.forEach(function(row,gy){ row.forEach(function(cell,gx){
+    if(cell.t!=='void'){
+      minX=Math.min(minX,gx); maxX=Math.max(maxX,gx+1);
+      minY=Math.min(minY,gy); maxY=Math.max(maxY,gy+1);
+    }
+  });});
+  var s0=w2tmp(minX,minY), s1=w2tmp(maxX,minY), s2=w2tmp(minX,maxY), s3=w2tmp(maxX,maxY);
+  var sxArr=[s0.x,s1.x,s2.x,s3.x], syArr=[s0.y,s1.y,s2.y,s3.y];
+  var sW = Math.max.apply(null,sxArr)-Math.min.apply(null,sxArr);
+  var sH = Math.max.apply(null,syArr)-Math.min.apply(null,syArr);
+  ISO_OX = VW/2 - (w2tmp(minX,minY).x + sW/2);
+  ISO_OY = (HUD + VH)/2 - (w2tmp(minX,minY).y + sH/2) - TILE_DEPTH;
+}
+
+// ============================================================
+// TILE SIZE CALIBRATION — scales TW/TH so hole fits screen
+// ============================================================
+function calibrateTile(hole) {
+  var GW=hole.grid[0].length, GH=hole.grid.length;
+  // Iso screen bounds: width = (GW+GH)*TW/2, height = (GW+GH)*TH/2
+  var maxTW = (VW*0.9) / ((GW+GH)*0.5);
+  var maxTH = (VH-HUD-40)*0.9 / ((GW+GH)*0.5);
+  TW = Math.max(32, Math.min(80, Math.floor(maxTW)));
+  TH = Math.max(16, Math.min(40, Math.floor(maxTH)));
+  // Enforce 2:1
+  TW = Math.round(TH*2);
+  TILE_DEPTH = Math.round(TH*0.6);
+}
+
+// ============================================================
+// TILE TYPES
+// ============================================================
+var T = {
+  VOID:    'void',
+  TEE:     'tee',
+  FAIR:    'fair',
+  ROUGH:   'rough',
+  SAND:    'sand',
+  WATER:   'water',
+  GREEN:   'green',
+  BRIDGE:  'bridge',
+  PATH:    'path'
+};
+
+// Friction per tile type (multiplier applied each physics frame)
+var FRIC = {
+  tee:    0.991,
+  fair:   0.991,
+  rough:  0.960,
+  sand:   0.870,
+  water:  0.500,  // ball resets when it stops on water
+  green:  0.978,
+  bridge: 0.991,
+  path:   0.988,
+  void:   0.960
+};
 
 // ============================================================
 // GAME STATE
 // ============================================================
-var STATE = {
-  hole:        0,
-  strokes:     0,
-  scores:      [],
-  totalPar:    0,
-  totalStrokes:0,
-  ball: { x:0, y:0, vx:0, vy:0, r:9, moving:false, pocketed:false },
-  drag: { active:false, sx:0, sy:0, cx:0, cy:0 },
-  paused:      false,
-  gameActive:  false,
-  holeComplete:false,
-  frame:       0
+var G = {
+  holeIdx:  0,
+  strokes:  0,
+  scores:   [],
+  totPar:   0,
+  totStrokes:0,
+  ball: {wx:0,wy:0, vx:0,vy:0, r:0.38, moving:false, pocketed:false},
+  lastDry:  {wx:0,wy:0},  // last non-water position
+  drag: {on:false, sx:0,sy:0, cx:0,cy:0},
+  mouse:{x:0,y:0},
+  paused:   false,
+  active:   false,
+  holeDone: false
 };
 
-// ============================================================
-// CANVAS
-// ============================================================
-var canvas = document.getElementById('game-canvas');
-var ctx    = canvas.getContext('2d');
-var CW = 0, CH = 0;
-
-function resizeCanvas() {
-  var wrap  = document.getElementById('canvas-wrap');
-  var hudT  = document.getElementById('hud').offsetHeight;
-  var hudB  = document.getElementById('hud-bottom').offsetHeight;
-  var avail = window.innerHeight - hudT - hudB;
-  var size  = Math.min(window.innerWidth, avail, 520);
-  canvas.width  = size;
-  canvas.height = size;
-  canvas.style.width  = size + 'px';
-  canvas.style.height = size + 'px';
-  CW = size; CH = size;
-}
+// Current hole
+var HOLE = null;
 
 // ============================================================
 // HOLE DEFINITIONS
-// Top-down 2D. Everything in canvas pixels (0..CW, 0..CH).
-// Each hole specifies:
-//   walls   : [{x,y,w,h}] rectangles — ball bounces off these
-//   floor   : [{x,y,w,h}] green tiles (drawn first)
-//   cup     : {x,y,r}     the hole
-//   tee     : {x,y}       ball start
-//   obstacles: []          moving objects
-//   tunnelIn/Out: {x,y,r} optional teleport pair
-// All coords are in a 0..1 unit space, scaled to CW/CH at draw time.
+// Grid: 2D array of cell objects {t: tileType}
+// Obstacles: array of obstacle objects
+// tee/cup in world (grid) coordinates
 // ============================================================
-var HOLES_DEF = [
-
-  // 01 — Such Start (par 2) — straight corridor, one bump wall
-  {
-    name:'SUCH START', par:2,
-    tee: {x:0.5, y:0.82},
-    cup: {x:0.5, y:0.18},
-    floor:[{x:0.3,y:0.1,w:0.4,h:0.85}],
-    walls:[
-      {x:0.3,y:0.1,w:0.02,h:0.85},  // left wall
-      {x:0.68,y:0.1,w:0.02,h:0.85}, // right wall
-      {x:0.3,y:0.1,w:0.4,h:0.02},   // top wall
-      {x:0.3,y:0.93,w:0.4,h:0.02},  // bottom wall
-      {x:0.54,y:0.44,w:0.16,h:0.04} // bump wall right side
-    ],
-    obstacles:[],
-    tunnelIn:null, tunnelOut:null
-  },
-
-  // 02 — Moon Ramp (par 3) — L-shaped
-  {
-    name:'MOON RAMP', par:3,
-    tee: {x:0.2, y:0.82},
-    cup: {x:0.82, y:0.18},
-    floor:[
-      {x:0.1,y:0.65,w:0.35,h:0.27},
-      {x:0.1,y:0.1, w:0.82,h:0.58}
-    ],
-    walls:[
-      {x:0.1, y:0.65,w:0.02,h:0.27},
-      {x:0.43,y:0.65,w:0.02,h:0.27},
-      {x:0.1, y:0.9, w:0.82,h:0.02},
-      {x:0.1, y:0.1, w:0.02,h:0.82},
-      {x:0.1, y:0.1, w:0.82,h:0.02},
-      {x:0.9, y:0.1, w:0.02,h:0.55},
-      {x:0.43,y:0.63,w:0.49,h:0.02}
-    ],
-    obstacles:[{type:'shibe', x:0.82, y:0.18, r:0.05}],
-    tunnelIn:null, tunnelOut:null
-  },
-
-  // 03 — The Windmill (par 3) — corridor with spinning windmill
-  {
-    name:'THE WINDMILL', par:3,
-    tee: {x:0.5, y:0.85},
-    cup: {x:0.5, y:0.12},
-    floor:[{x:0.28,y:0.07,w:0.44,h:0.88}],
-    walls:[
-      {x:0.28,y:0.07,w:0.02,h:0.88},
-      {x:0.7, y:0.07,w:0.02,h:0.88},
-      {x:0.28,y:0.07,w:0.44,h:0.02},
-      {x:0.28,y:0.93,w:0.44,h:0.02}
-    ],
-    obstacles:[{type:'windmill', x:0.5, y:0.5, bladeLen:0.13, speed:0.022, angle:0}],
-    tunnelIn:null, tunnelOut:null
-  },
-
-  // 04 — Dogecoin Canyon (par 4) — narrow zigzag
-  {
-    name:'DOGE CANYON', par:4,
-    tee: {x:0.15, y:0.85},
-    cup: {x:0.85, y:0.15},
-    floor:[
-      {x:0.08,y:0.72,w:0.28,h:0.2},
-      {x:0.08,y:0.38,w:0.18,h:0.36},
-      {x:0.08,y:0.3, w:0.5, h:0.1},
-      {x:0.5, y:0.1, w:0.18,h:0.28},
-      {x:0.5, y:0.08,w:0.44,h:0.12}
-    ],
-    walls:[
-      {x:0.08,y:0.72,w:0.02,h:0.2},{x:0.34,y:0.72,w:0.02,h:0.2},
-      {x:0.08,y:0.9, w:0.28,h:0.02},{x:0.08,y:0.72,w:0.28,h:0.02},
-      {x:0.08,y:0.38,w:0.02,h:0.36},{x:0.08,y:0.38,w:0.02,h:0.02},
-      {x:0.08,y:0.3, w:0.02,h:0.1}, {x:0.56,y:0.3, w:0.02,h:0.1},
-      {x:0.08,y:0.3, w:0.5, h:0.02},{x:0.08,y:0.38,w:0.5, h:0.02},
-      {x:0.5, y:0.1, w:0.02,h:0.28},{x:0.66,y:0.1, w:0.02,h:0.28},
-      {x:0.5, y:0.08,w:0.44,h:0.02},{x:0.5, y:0.18,w:0.44,h:0.02},
-      {x:0.92,y:0.08,w:0.02,h:0.12}
-    ],
-    obstacles:[],
-    tunnelIn:null, tunnelOut:null
-  },
-
-  // 05 — To The Moon (par 2) — wide corridor, moving rocket obstacle
-  {
-    name:'TO THE MOON', par:2,
-    tee: {x:0.12, y:0.5},
-    cup: {x:0.88, y:0.5},
-    floor:[{x:0.06,y:0.3,w:0.88,h:0.4}],
-    walls:[
-      {x:0.06,y:0.3, w:0.88,h:0.02},
-      {x:0.06,y:0.68,w:0.88,h:0.02},
-      {x:0.06,y:0.3, w:0.02,h:0.4},
-      {x:0.92,y:0.3, w:0.02,h:0.4}
-    ],
-    obstacles:[{type:'rocket', x:0.5, y:0.5, vy:0.004, vx:0, bounceY:true, py:0.32, r:0.04}],
-    tunnelIn:null, tunnelOut:null
-  },
-
-  // 06 — Much Tunnel (par 3) — two rooms connected by tunnel
-  {
-    name:'MUCH TUNNEL', par:3,
-    tee: {x:0.2, y:0.78},
-    cup: {x:0.8, y:0.22},
-    floor:[
-      {x:0.06,y:0.55,w:0.42,h:0.38},
-      {x:0.52,y:0.08,w:0.42,h:0.38}
-    ],
-    walls:[
-      {x:0.06,y:0.55,w:0.02,h:0.38},{x:0.46,y:0.55,w:0.02,h:0.38},
-      {x:0.06,y:0.91,w:0.42,h:0.02},{x:0.06,y:0.55,w:0.42,h:0.02},
-      {x:0.52,y:0.08,w:0.02,h:0.38},{x:0.92,y:0.08,w:0.02,h:0.38},
-      {x:0.52,y:0.08,w:0.42,h:0.02},{x:0.52,y:0.44,w:0.42,h:0.02}
-    ],
-    obstacles:[],
-    tunnelIn: {x:0.46, y:0.73},
-    tunnelOut:{x:0.52, y:0.27}
-  },
-
-  // 07 — Very Obstacle (par 4) — open field, 3 moving Shibes
-  {
-    name:'VERY OBSTACLE', par:4,
-    tee: {x:0.1, y:0.9},
-    cup: {x:0.9, y:0.1},
-    floor:[{x:0.06,y:0.06,w:0.88,h:0.88}],
-    walls:[
-      {x:0.06,y:0.06,w:0.88,h:0.02},
-      {x:0.06,y:0.92,w:0.88,h:0.02},
-      {x:0.06,y:0.06,w:0.02,h:0.88},
-      {x:0.92,y:0.06,w:0.02,h:0.88},
-      {x:0.35,y:0.06,w:0.02,h:0.45},
-      {x:0.63,y:0.49,w:0.02,h:0.45}
-    ],
-    obstacles:[
-      {type:'shibe_move', x:0.5, y:0.3, r:0.05, vx:0, vy:0.003, minY:0.1, maxY:0.9, minX:0.1, maxX:0.9},
-      {type:'shibe_move', x:0.3, y:0.6, r:0.05, vx:0.003, vy:0, minY:0.1, maxY:0.9, minX:0.1, maxX:0.88},
-      {type:'shibe_move', x:0.7, y:0.7, r:0.05, vx:-0.002, vy:0.002, minY:0.1, maxY:0.9, minX:0.1, maxX:0.9}
-    ],
-    tunnelIn:null, tunnelOut:null
-  },
-
-  // 08 — Wow Spiral (par 3) — concentric square maze, cup at center
-  {
-    name:'WOW SPIRAL', par:3,
-    tee: {x:0.12, y:0.88},
-    cup: {x:0.5, y:0.5},
-    floor:[{x:0.06,y:0.06,w:0.88,h:0.88}],
-    walls:[
-      // outer
-      {x:0.06,y:0.06,w:0.88,h:0.02},{x:0.06,y:0.92,w:0.88,h:0.02},
-      {x:0.06,y:0.06,w:0.02,h:0.88},{x:0.92,y:0.06,w:0.02,h:0.88},
-      // ring 1 — open bottom-left
-      {x:0.2,y:0.2,w:0.6,h:0.02},{x:0.2,y:0.2,w:0.02,h:0.42},
-      {x:0.2,y:0.6,w:0.35,h:0.02},{x:0.78,y:0.2,w:0.02,h:0.6},
-      {x:0.2,y:0.78,w:0.6,h:0.02},
-      // ring 2 — open top-right
-      {x:0.32,y:0.32,w:0.2,h:0.02},{x:0.32,y:0.32,w:0.02,h:0.36},
-      {x:0.32,y:0.66,w:0.36,h:0.02},{x:0.66,y:0.32,w:0.02,h:0.2}
-    ],
-    obstacles:[],
-    tunnelIn:null, tunnelOut:null
-  },
-
-  // 09 — Such Finish (par 5) — everything combined
-  {
-    name:'SUCH FINISH', par:5,
-    tee: {x:0.12, y:0.88},
-    cup: {x:0.88, y:0.12},
-    floor:[{x:0.06,y:0.06,w:0.88,h:0.88}],
-    walls:[
-      {x:0.06,y:0.06,w:0.88,h:0.02},{x:0.06,y:0.92,w:0.88,h:0.02},
-      {x:0.06,y:0.06,w:0.02,h:0.88},{x:0.92,y:0.06,w:0.02,h:0.88},
-      {x:0.3, y:0.06,w:0.02,h:0.55},
-      {x:0.6, y:0.39,w:0.02,h:0.55},
-      {x:0.06,y:0.39,w:0.26,h:0.02},
-      {x:0.32,y:0.7, w:0.3, h:0.02}
-    ],
-    obstacles:[
-      {type:'windmill', x:0.18, y:0.22, bladeLen:0.1, speed:0.028, angle:0},
-      {type:'rocket',   x:0.75, y:0.65, vy:0.005, vx:0, bounceY:true, py:0.1, r:0.04},
-      {type:'shibe_move',x:0.5, y:0.5,  r:0.05, vx:0.003, vy:0.002, minY:0.1,maxY:0.9,minX:0.1,maxX:0.9}
-    ],
-    tunnelIn: {x:0.3, y:0.75},
-    tunnelOut:{x:0.62, y:0.25}
-  }
+var META = [
+  {name:'SUCH STRAIGHT', par:3},
+  {name:'THE DOGLEG',    par:4},
+  {name:'SAND TRAP',     par:3},
+  {name:'WATER HAZARD',  par:4},
+  {name:'THE WINDMILL',  par:3},
+  {name:'PIPE DREAM',    par:4},
+  {name:'SHIBE ALLEY',   par:4},
+  {name:'ISLAND GREEN',  par:3},
+  {name:'SUCH FINISH',   par:5}
 ];
 
-// ============================================================
-// CURRENT HOLE — scaled from unit space to canvas pixels
-// ============================================================
-var HOLE = null;
+// Grid builder helpers
+function row(cells) { return cells.map(function(t){return{t:t};}); }
+function makeGrid(rows){ return rows; }
 
-function scaleHole(def) {
-  // READS: def (unit-space hole), CW, CH
-  // RETURNS: pixel-space hole object
-  function sp(v) { return v * CW; } // scale position
-  var h = {
-    name: def.name, par: def.par,
-    tee:  {x: sp(def.tee.x), y: sp(def.tee.y)},
-    cup:  {x: sp(def.cup.x), y: sp(def.cup.y), r: sp(0.048)},
-    floor: def.floor.map(function(f){ return {x:sp(f.x),y:sp(f.y),w:sp(f.w),h:sp(f.h)}; }),
-    walls: def.walls.map(function(w){ return {x:sp(w.x),y:sp(w.y),w:sp(w.w),h:sp(w.h)}; }),
-    obstacles: def.obstacles.map(function(o){
-      var no = {};
-      for (var k in o) no[k] = o[k];
-      no.x = sp(o.x); no.y = sp(o.y);
-      if (o.r    !== undefined) no.r  = sp(o.r);
-      if (o.bladeLen !== undefined) no.bladeLen = sp(o.bladeLen);
-      if (o.minX !== undefined) { no.minX=sp(o.minX);no.maxX=sp(o.maxX);no.minY=sp(o.minY);no.maxY=sp(o.maxY); }
-      if (o.py   !== undefined) no.py = sp(o.py);
-      no.vx = (o.vx||0) * CW;
-      no.vy = (o.vy||0) * CW;
-      no._x = no.x; no._y = no.y; // runtime position
-      return no;
-    }),
-    tunnelIn:  def.tunnelIn  ? {x:sp(def.tunnelIn.x),  y:sp(def.tunnelIn.y),  r:sp(0.04)} : null,
-    tunnelOut: def.tunnelOut ? {x:sp(def.tunnelOut.x), y:sp(def.tunnelOut.y), r:sp(0.04)} : null
+// HOLE 1 — Straight corridor, slight rough flanks
+function defHole1() {
+  var _ = T.VOID, F=T.FAIR, R=T.ROUGH, E=T.TEE, G=T.GREEN;
+  return {
+    grid: makeGrid([
+      row([_,_,_,_,_,_,_,_,_,_,_,_]),
+      row([_,R,R,R,R,R,R,R,R,R,R,_]),
+      row([_,R,F,F,F,F,F,F,F,F,R,_]),
+      row([_,R,E,F,F,F,F,F,F,G,R,_]),
+      row([_,R,F,F,F,F,F,F,F,F,R,_]),
+      row([_,R,R,R,R,R,R,R,R,R,R,_]),
+      row([_,_,_,_,_,_,_,_,_,_,_,_])
+    ]),
+    tee: {wx:2.5, wy:3.5},
+    cup: {wx:9.5, wy:3.5},
+    obstacles: [
+      {type:'tree', wx:5.5, wy:2.5},
+      {type:'tree', wx:5.5, wy:4.5}
+    ],
+    pipeIn:null, pipeOut:null
   };
-  return h;
+}
+
+// HOLE 2 — L-shaped dogleg right
+function defHole2() {
+  var _=T.VOID,F=T.FAIR,R=T.ROUGH,E=T.TEE,G=T.GREEN,S=T.SAND;
+  return {
+    grid: makeGrid([
+      row([_,_,_,_,_,_,_,_,_]),
+      row([_,R,R,R,R,R,_,_,_]),
+      row([_,R,F,F,F,R,_,_,_]),
+      row([_,R,E,F,F,R,_,_,_]),
+      row([_,R,F,F,F,R,_,_,_]),
+      row([_,R,R,F,F,R,R,R,_]),
+      row([_,_,R,F,F,F,F,R,_]),
+      row([_,_,R,S,F,F,G,R,_]),
+      row([_,_,R,F,F,F,F,R,_]),
+      row([_,_,R,R,R,R,R,R,_]),
+      row([_,_,_,_,_,_,_,_,_])
+    ]),
+    tee: {wx:2.5, wy:3.5},
+    cup: {wx:6.5, wy:7.5},
+    obstacles: [
+      {type:'windmill', wx:4.5, wy:6.5, speed:0.02, bladeR:0.9}
+    ],
+    pipeIn:null, pipeOut:null
+  };
+}
+
+// HOLE 3 — Straight with sand bunkers
+function defHole3() {
+  var _=T.VOID,F=T.FAIR,R=T.ROUGH,E=T.TEE,G=T.GREEN,S=T.SAND;
+  return {
+    grid: makeGrid([
+      row([_,_,_,_,_,_,_,_,_,_,_,_,_]),
+      row([_,R,R,R,R,R,R,R,R,R,R,R,_]),
+      row([_,R,F,F,F,F,F,F,F,F,F,R,_]),
+      row([_,R,E,F,S,S,F,F,S,F,G,R,_]),
+      row([_,R,F,F,F,F,F,F,F,F,F,R,_]),
+      row([_,R,R,R,R,R,R,R,R,R,R,R,_]),
+      row([_,_,_,_,_,_,_,_,_,_,_,_,_])
+    ]),
+    tee: {wx:2.5, wy:3.5},
+    cup: {wx:10.5, wy:3.5},
+    obstacles: [],
+    pipeIn:null, pipeOut:null
+  };
+}
+
+// HOLE 4 — Water hazard with bridge
+function defHole4() {
+  var _=T.VOID,F=T.FAIR,R=T.ROUGH,E=T.TEE,G=T.GREEN,W=T.WATER,B=T.BRIDGE;
+  return {
+    grid: makeGrid([
+      row([_,_,_,_,_,_,_,_,_,_,_]),
+      row([_,R,R,R,R,R,R,R,R,R,_]),
+      row([_,R,F,F,W,B,W,F,F,R,_]),
+      row([_,R,E,F,W,B,W,F,G,R,_]),
+      row([_,R,F,F,W,B,W,F,F,R,_]),
+      row([_,R,R,R,R,R,R,R,R,R,_]),
+      row([_,_,_,_,_,_,_,_,_,_,_])
+    ]),
+    tee: {wx:2.5, wy:3.5},
+    cup: {wx:8.5, wy:3.5},
+    obstacles: [
+      {type:'tree', wx:1.5, wy:2.5},
+      {type:'tree', wx:1.5, wy:4.5}
+    ],
+    pipeIn:null, pipeOut:null
+  };
+}
+
+// HOLE 5 — Windmill center
+function defHole5() {
+  var _=T.VOID,F=T.FAIR,R=T.ROUGH,E=T.TEE,G=T.GREEN,S=T.SAND;
+  return {
+    grid: makeGrid([
+      row([_,_,_,_,_,_,_,_,_,_,_]),
+      row([_,R,R,R,R,R,R,R,R,R,_]),
+      row([_,R,F,F,F,F,F,F,F,R,_]),
+      row([_,R,E,F,F,F,F,F,G,R,_]),
+      row([_,R,F,F,F,F,F,F,F,R,_]),
+      row([_,R,R,R,R,R,R,R,R,R,_]),
+      row([_,_,_,_,_,_,_,_,_,_,_])
+    ]),
+    tee: {wx:2.5, wy:3.5},
+    cup: {wx:8.5, wy:3.5},
+    obstacles:[
+      {type:'windmill', wx:5.5, wy:3.5, speed:0.025, bladeR:1.1},
+      {type:'tree', wx:3.5, wy:2.5},
+      {type:'tree', wx:3.5, wy:4.5}
+    ],
+    pipeIn:null, pipeOut:null
+  };
+}
+
+// HOLE 6 — Pipe teleport
+function defHole6() {
+  var _=T.VOID,F=T.FAIR,R=T.ROUGH,E=T.TEE,G=T.GREEN,S=T.SAND,W=T.WATER;
+  return {
+    grid: makeGrid([
+      row([_,_,_,_,_,_,_,_,_,_,_,_]),
+      row([_,R,R,R,R,R,_,R,R,R,R,_]),
+      row([_,R,F,F,F,R,_,R,F,F,R,_]),
+      row([_,R,E,F,F,R,_,R,F,G,R,_]),
+      row([_,R,F,F,F,R,_,R,F,F,R,_]),
+      row([_,R,R,R,R,R,_,R,R,R,R,_]),
+      row([_,_,_,_,_,_,_,_,_,_,_,_])
+    ]),
+    tee: {wx:2.5, wy:3.5},
+    cup: {wx:9.5, wy:3.5},
+    obstacles:[
+      {type:'tree', wx:3.5, wy:2.5},
+      {type:'tree', wx:3.5, wy:4.5}
+    ],
+    pipeIn:  {wx:4.5, wy:3.5},
+    pipeOut: {wx:7.5, wy:3.5}
+  };
+}
+
+// HOLE 7 — Shibe blockers in wide field
+function defHole7() {
+  var _=T.VOID,F=T.FAIR,R=T.ROUGH,E=T.TEE,G=T.GREEN,S=T.SAND;
+  return {
+    grid: makeGrid([
+      row([_,_,_,_,_,_,_,_,_,_,_,_,_]),
+      row([_,R,R,R,R,R,R,R,R,R,R,R,_]),
+      row([_,R,F,F,F,F,F,F,F,F,F,R,_]),
+      row([_,R,F,F,F,F,F,F,F,F,F,R,_]),
+      row([_,R,E,F,F,F,F,F,F,F,G,R,_]),
+      row([_,R,F,F,F,F,F,F,F,F,F,R,_]),
+      row([_,R,F,F,F,F,F,F,F,F,F,R,_]),
+      row([_,R,R,R,R,R,R,R,R,R,R,R,_]),
+      row([_,_,_,_,_,_,_,_,_,_,_,_,_])
+    ]),
+    tee: {wx:2.5, wy:4.5},
+    cup: {wx:10.5, wy:4.5},
+    obstacles:[
+      {type:'shibe', wx:5.0, wy:3.0, vx:0, vy:0.04, minY:2.2, maxY:6.8},
+      {type:'shibe', wx:7.0, wy:6.0, vx:0, vy:-0.04, minY:2.2, maxY:6.8},
+      {type:'shibe', wx:9.0, wy:4.5, vx:0, vy:0.035, minY:2.2, maxY:6.8},
+      {type:'tree', wx:4.5, wy:2.5},
+      {type:'tree', wx:4.5, wy:6.5}
+    ],
+    pipeIn:null, pipeOut:null
+  };
+}
+
+// HOLE 8 — Island green (water surrounds green)
+function defHole8() {
+  var _=T.VOID,F=T.FAIR,R=T.ROUGH,E=T.TEE,G=T.GREEN,W=T.WATER,B=T.BRIDGE,S=T.SAND;
+  return {
+    grid: makeGrid([
+      row([_,_,_,_,_,_,_,_,_,_,_]),
+      row([_,R,R,R,R,R,R,R,R,R,_]),
+      row([_,R,F,F,F,W,W,W,W,R,_]),
+      row([_,R,E,F,F,W,G,W,W,R,_]),
+      row([_,R,F,B,F,W,G,W,W,R,_]),
+      row([_,R,F,F,F,W,W,W,W,R,_]),
+      row([_,R,R,R,R,R,R,R,R,R,_]),
+      row([_,_,_,_,_,_,_,_,_,_,_])
+    ]),
+    tee: {wx:2.5, wy:3.5},
+    cup: {wx:6.5, wy:3.5},
+    obstacles:[
+      {type:'tree', wx:1.5, wy:3.5}
+    ],
+    pipeIn:null, pipeOut:null
+  };
+}
+
+// HOLE 9 — Final gauntlet: Z-shape, all hazards
+function defHole9() {
+  var _=T.VOID,F=T.FAIR,R=T.ROUGH,E=T.TEE,G=T.GREEN,W=T.WATER,S=T.SAND,B=T.BRIDGE;
+  return {
+    grid: makeGrid([
+      row([_,_,_,_,_,_,_,_,_,_,_,_]),
+      row([_,R,R,R,R,R,R,R,_,_,_,_]),
+      row([_,R,F,F,S,F,F,R,_,_,_,_]),
+      row([_,R,E,F,F,F,F,R,_,_,_,_]),
+      row([_,R,F,F,S,F,F,R,R,R,R,_]),
+      row([_,R,R,R,R,F,F,F,F,F,R,_]),
+      row([_,_,_,R,W,F,F,S,F,F,R,_]),
+      row([_,_,_,R,B,F,F,F,F,G,R,_]),
+      row([_,_,_,R,W,F,F,S,F,F,R,_]),
+      row([_,_,_,R,R,R,R,R,R,R,R,_]),
+      row([_,_,_,_,_,_,_,_,_,_,_,_])
+    ]),
+    tee: {wx:2.5, wy:3.5},
+    cup: {wx:9.5, wy:7.5},
+    obstacles:[
+      {type:'windmill', wx:6.5, wy:2.5, speed:0.03, bladeR:0.9},
+      {type:'windmill', wx:7.5, wy:6.5, speed:0.025, bladeR:0.9},
+      {type:'shibe', wx:5.5, wy:5.5, vx:0.04, vy:0, minX:4.5, maxX:9.5},
+      {type:'tree',  wx:8.5, wy:2.5},
+      {type:'tree',  wx:3.5, wy:6.5}
+    ],
+    pipeIn:null, pipeOut:null
+  };
+}
+
+var HOLE_DEFS = [defHole1,defHole2,defHole3,defHole4,defHole5,defHole6,defHole7,defHole8,defHole9];
+
+function buildHole(idx) {
+  var def = HOLE_DEFS[idx]();
+  calibrateTile(def);
+  setIsoOrigin(def);
+  // Scale tee/cup to current TW/TH
+  HOLE = def;
+  // Init obstacle runtime positions
+  HOLE.obstacles.forEach(function(o){ o._wx=o.wx; o._wy=o.wy; o._angle=0; });
+  G.ball.r = 0.38;
 }
 
 // ============================================================
-// PHYSICS
-// READS: STATE.ball, HOLE.walls, HOLE.obstacles
-// WRITES: STATE.ball position + velocity
-// DECISION: circle vs AABB (rect) collision — always contained
+// TILE COLLISION — get tile at world position
 // ============================================================
-var FRICTION    = 0.986;   // TUNED: restored — speed change is enough
-var RESTITUTION = 0.75;    // bounce energy retention
-var MIN_SPEED   = 0.18;    // stop threshold (px/frame)
+function getTileAt(wx, wy) {
+  if (!HOLE) return T.VOID;
+  var gx=Math.floor(wx), gy=Math.floor(wy);
+  if (gy<0||gy>=HOLE.grid.length) return T.VOID;
+  if (gx<0||gx>=HOLE.grid[gy].length) return T.VOID;
+  return HOLE.grid[gy][gx].t;
+}
 
-function physicsUpdate() {
-  var b = STATE.ball;
+function getFric(wx,wy) {
+  var t=getTileAt(wx,wy);
+  return FRIC[t]||FRIC.rough;
+}
+
+// Is tile solid (ball bounces off)?
+function isSolid(t) { return t===T.VOID; }
+
+// ============================================================
+// PHYSICS — flat 2D world space
+// ============================================================
+var RESTITUTION = 0.80;
+var MIN_SPEED   = 0.004;
+
+function physUpdate() {
+  var b=G.ball;
   if (!b.moving) return;
 
-  b.x += b.vx;
-  b.y += b.vy;
+  var steps=3; // sub-steps for accuracy
+  for (var s=0;s<steps;s++) {
+    b.wx += b.vx/steps;
+    b.wy += b.vy/steps;
+    resolveWalls(b);
+    resolveObstacles(b);
+  }
 
-  // Wall collisions
-  HOLE.walls.forEach(function(w) { resolveCircleRect(b, w); });
-
-  // Obstacle collisions
-  HOLE.obstacles.forEach(function(o) {
-    if (o.type === 'windmill') resolveWindmill(b, o);
-    else if (o.type === 'shibe' || o.type === 'shibe_move') resolveCircleCircle(b, o._x||o.x, o._y||o.y, o.r);
-    else if (o.type === 'rocket') resolveCircleCircle(b, o._x||o.x, o._y||o.y, o.r);
-  });
-
-  // Tunnel teleport
-  if (HOLE.tunnelIn) {
-    var ti = HOLE.tunnelIn;
-    var dx = b.x - ti.x, dy = b.y - ti.y;
-    if (Math.sqrt(dx*dx+dy*dy) < ti.r + b.r) {
-      b.x = HOLE.tunnelOut.x;
-      b.y = HOLE.tunnelOut.y;
-      showSpeech('MUCH TUNNEL!');
+  // Pipe teleport check
+  if (HOLE.pipeIn) {
+    var pi=HOLE.pipeIn;
+    var dx=b.wx-pi.wx, dy=b.wy-pi.wy;
+    if (Math.sqrt(dx*dx+dy*dy)<0.5) {
+      b.wx=HOLE.pipeOut.wx; b.wy=HOLE.pipeOut.wy;
+      showSpeech('SUCH PIPE! VERY TELEPORT!');
     }
   }
 
   // Friction
-  b.vx *= FRICTION;
-  b.vy *= FRICTION;
+  var fr=getFric(b.wx,b.wy);
+  b.vx*=fr; b.vy*=fr;
 
-  // Stop
-  var spd = Math.sqrt(b.vx*b.vx + b.vy*b.vy);
-  if (spd < MIN_SPEED) {
-    b.moving = false; b.vx = 0; b.vy = 0;
-    setHint('DRAG TO AIM');
-    checkCup();
+  // Track last dry position
+  var ct=getTileAt(b.wx,b.wy);
+  if (ct!==T.WATER && ct!==T.VOID) { G.lastDry.wx=b.wx; G.lastDry.wy=b.wy; }
+
+  // Stop check
+  var spd=Math.sqrt(b.vx*b.vx+b.vy*b.vy);
+  if (spd<MIN_SPEED) {
+    b.moving=false; b.vx=0; b.vy=0;
+    setHint('DRAG ANYWHERE · RELEASE TO SHOOT');
+    // Water reset
+    if (ct===T.WATER||ct===T.VOID) {
+      showSpeech('SPLASH! MUCH WET. SUCH PENALTY.');
+      G.strokes++; updateHUD();
+      b.wx=G.lastDry.wx; b.wy=G.lastDry.wy;
+    }
+    cupCheck();
   } else {
-    checkCup();
+    cupCheck();
   }
 }
 
-function resolveCircleRect(b, r) {
-  // READS: ball circle, rect wall
-  // WRITES: ball position + velocity (bounce)
-  var nearX = Math.max(r.x, Math.min(b.x, r.x + r.w));
-  var nearY = Math.max(r.y, Math.min(b.y, r.y + r.h));
-  var dx = b.x - nearX, dy = b.y - nearY;
-  var dist = Math.sqrt(dx*dx + dy*dy);
-  if (dist < b.r && dist > 0.001) {
-    var nx = dx/dist, ny = dy/dist;
-    // Push out
-    b.x = nearX + nx * (b.r + 0.5);
-    b.y = nearY + ny * (b.r + 0.5);
-    // Reflect
-    var dot = b.vx*nx + b.vy*ny;
-    b.vx = (b.vx - 2*dot*nx) * RESTITUTION;
-    b.vy = (b.vy - 2*dot*ny) * RESTITUTION;
-  }
-}
-
-function resolveCircleCircle(b, ox, oy, or_) {
-  // READS: ball circle, obstacle circle
-  // WRITES: ball velocity
-  var dx = b.x - ox, dy = b.y - oy;
-  var dist = Math.sqrt(dx*dx + dy*dy);
-  var minD = b.r + or_;
-  if (dist < minD && dist > 0.001) {
-    var nx = dx/dist, ny = dy/dist;
-    b.x = ox + nx*(minD + 0.5);
-    b.y = oy + ny*(minD + 0.5);
-    var dot = b.vx*nx + b.vy*ny;
-    b.vx = (b.vx - 2*dot*nx) * RESTITUTION;
-    b.vy = (b.vy - 2*dot*ny) * RESTITUTION;
-  }
-}
-
-function resolveWindmill(b, obs) {
-  // READS: windmill obstacle (4 rotating blade segments)
-  // WRITES: ball velocity on blade hit
-  var angle = obs.angle || 0;
-  var cx = obs.x, cy = obs.y;
-  var bl = obs.bladeLen;
-  for (var i = 0; i < 4; i++) {
-    var a  = angle + i * Math.PI/2;
-    var ex = cx + Math.cos(a)*bl, ey = cy + Math.sin(a)*bl;
-    var cp = closestOnSeg(b.x, b.y, cx, cy, ex, ey);
-    var dx = b.x - cp.x, dy = b.y - cp.y;
-    var d  = Math.sqrt(dx*dx+dy*dy);
-    if (d < b.r + 5 && d > 0.001) {
-      var nx = dx/d, ny = dy/d;
-      b.x = cp.x + nx*(b.r+5+0.5);
-      b.y = cp.y + ny*(b.r+5+0.5);
-      var dot = b.vx*nx + b.vy*ny;
-      b.vx = (b.vx-2*dot*nx)*RESTITUTION;
-      b.vy = (b.vy-2*dot*ny)*RESTITUTION;
+function resolveWalls(b) {
+  // Check 8 surrounding cells + current cell
+  var cx=Math.floor(b.wx), cy=Math.floor(b.wy);
+  for (var dy=-1;dy<=2;dy++) {
+    for (var dx=-1;dx<=2;dx++) {
+      var gx=cx+dx, gy=cy+dy;
+      if (gy<0||gy>=HOLE.grid.length) continue;
+      if (gx<0||gx>=HOLE.grid[gy].length) continue;
+      var t=HOLE.grid[gy][gx].t;
+      if (!isSolid(t)) continue;
+      // AABB cell collision
+      var cellX=gx, cellY=gy;
+      circleAABB(b, cellX, cellY, cellX+1, cellY+1);
     }
   }
 }
 
-function closestOnSeg(px,py,ax,ay,bx,by) {
-  var dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy;
-  if(l2<0.001) return {x:ax,y:ay};
-  var t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/l2));
-  return {x:ax+t*dx, y:ay+t*dy};
+function circleAABB(b, x0,y0,x1,y1) {
+  var nx=Math.max(x0,Math.min(b.wx,x1));
+  var ny=Math.max(y0,Math.min(b.wy,y1));
+  var dx=b.wx-nx, dy=b.wy-ny;
+  var d=Math.sqrt(dx*dx+dy*dy);
+  if (d<b.r && d>0.0001) {
+    var nn=1/d; dx*=nn; dy*=nn;
+    b.wx=nx+dx*(b.r+0.001); b.wy=ny+dy*(b.r+0.001);
+    var dot=b.vx*dx+b.vy*dy;
+    b.vx=(b.vx-2*dot*dx)*RESTITUTION;
+    b.vy=(b.vy-2*dot*dy)*RESTITUTION;
+  }
 }
 
-function checkCup() {
-  if (STATE.holeComplete || STATE.ball.pocketed) return;
-  var b=STATE.ball, c=HOLE.cup;
-  var dx=b.x-c.x, dy=b.y-c.y;
-  var spd = Math.sqrt(b.vx*b.vx+b.vy*b.vy);
-  if (Math.sqrt(dx*dx+dy*dy) < c.r * 0.85 && spd < 5) {
-    STATE.ball.pocketed = true;
-    STATE.ball.moving   = false;
-    STATE.ball.vx = 0; STATE.ball.vy = 0;
-    STATE.holeComplete = true;
-    setTimeout(showHoleComplete, 500);
+function resolveObstacles(b) {
+  HOLE.obstacles.forEach(function(o) {
+    var ox=o._wx||o.wx, oy=o._wy||o.wy;
+    var or_= (o.type==='tree')?0.42 : (o.type==='shibe')?0.44 : 0;
+    if (o.type==='windmill') { resolveWindmill(b,o); return; }
+    if (or_===0) return;
+    var dx=b.wx-ox, dy=b.wy-oy;
+    var d=Math.sqrt(dx*dx+dy*dy), mn=b.r+or_;
+    if (d<mn&&d>0.0001) {
+      var nn=1/d; dx*=nn; dy*=nn;
+      b.wx=ox+dx*(mn+0.001); b.wy=oy+dy*(mn+0.001);
+      var dot=b.vx*dx+b.vy*dy;
+      b.vx=(b.vx-2*dot*dx)*RESTITUTION;
+      b.vy=(b.vy-2*dot*dy)*RESTITUTION;
+    }
+  });
+}
+
+function resolveWindmill(b,o) {
+  var cx=o.wx, cy=o.wy, bl=o.bladeR, a=o._angle||0;
+  for (var i=0;i<4;i++) {
+    var ang=a+i*Math.PI/2;
+    var ex=cx+Math.cos(ang)*bl, ey=cy+Math.sin(ang)*bl;
+    var cp=segClosest(b.wx,b.wy,cx,cy,ex,ey);
+    var dx=b.wx-cp.x, dy=b.wy-cp.y;
+    var d=Math.sqrt(dx*dx+dy*dy);
+    if (d<b.r+0.08&&d>0.0001) {
+      var nn=1/d; dx*=nn; dy*=nn;
+      b.wx=cp.x+dx*(b.r+0.08+0.001); b.wy=cp.y+dy*(b.r+0.08+0.001);
+      var dot=b.vx*dx+b.vy*dy;
+      b.vx=(b.vx-2*dot*dx)*RESTITUTION;
+      b.vy=(b.vy-2*dot*dy)*RESTITUTION;
+    }
+  }
+}
+
+function segClosest(px,py,ax,ay,bx,by) {
+  var dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy;
+  if(l2<0.0001)return{x:ax,y:ay};
+  var t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/l2));
+  return{x:ax+t*dx,y:ay+t*dy};
+}
+
+function cupCheck() {
+  if (G.holeDone||G.ball.pocketed) return;
+  var b=G.ball, c=HOLE.cup;
+  var dx=b.wx-c.wx, dy=b.wy-c.wy;
+  var spd=Math.sqrt(b.vx*b.vx+b.vy*b.vy);
+  if (Math.sqrt(dx*dx+dy*dy)<0.45&&spd<0.12) {
+    G.ball.pocketed=true; G.ball.moving=false; G.ball.vx=0; G.ball.vy=0;
+    G.holeDone=true;
+    setTimeout(showHoleComplete,500);
   }
 }
 
 function updateObstacles() {
-  // READS: HOLE.obstacles
-  // WRITES: obstacle _x, _y, angle
+  if(!HOLE)return;
   HOLE.obstacles.forEach(function(o) {
-    if (o.type === 'windmill') {
-      o.angle = (o.angle||0) + o.speed;
-    } else if (o.type === 'shibe_move') {
-      o._x = (o._x !== undefined ? o._x : o.x) + o.vx;
-      o._y = (o._y !== undefined ? o._y : o.y) + o.vy;
-      if (o._x < o.minX || o._x > o.maxX) { o.vx *= -1; o._x += o.vx; }
-      if (o._y < o.minY || o._y > o.maxY) { o.vy *= -1; o._y += o.vy; }
-    } else if (o.type === 'rocket') {
-      o._y = (o._y !== undefined ? o._y : o.y) + o.vy;
-      var minY = HOLE.cup.r * 3, maxY = CW - HOLE.cup.r * 3;
-      if (o.bounceY && (o._y < minY || o._y > maxY)) { o.vy *= -1; o._y += o.vy; }
+    if (o.type==='windmill') { o._angle=(o._angle||0)+o.speed; }
+    else if (o.type==='shibe') {
+      o._wx=(o._wx||o.wx)+o.vx;
+      o._wy=(o._wy||o.wy)+o.vy;
+      if(o.minX!==undefined&&(o._wx<o.minX||o._wx>o.maxX)){o.vx*=-1;o._wx+=o.vx;}
+      if(o.minY!==undefined&&(o._wy<o.minY||o._wy>o.maxY)){o.vy*=-1;o._wy+=o.vy;}
     }
   });
 }
 
 // ============================================================
-// DRAWING
+// ISOMETRIC TILE RENDERER
+// Draw order: sort by (gx+gy) ascending — painter's algorithm
 // ============================================================
-var PALETTE = {
-  sky:       '#87ceeb',
-  grass:     '#2d8a3e',
-  felt:      '#3aaa4a',
-  feltAlt:   '#34a044',
-  feltDark:  '#228832',
-  wall:      '#8B4513',
-  wallTop:   '#a0522d',
-  wallSide:  '#6b3410',
-  wallEdge:  '#4a2408',
-  cup:       '#0a0a0a',
-  cupRing:   '#1a1aff',
-  teeGreen:  'rgba(255,255,255,0.25)',
-  teeBorder: 'rgba(255,255,255,0.7)',
-  flagPole:  '#f0e8d0',
-  flagFill:  '#39ff14',
-  ballGold:  '#f0c060',
-  ballRim:   '#c9963a',
-  ballInner: '#f5d070',
-  ballSym:   '#0d3a10',
-  aimLine:   'rgba(255,255,255,0.6)',
-  aimDot:    '#ffffff',
-  power0:    '#39ff14',
-  power1:    '#f0c060',
-  power2:    '#e05c3a',
-  shibeBody: '#f0a830',
-  shibeDark: '#c07020',
-  tunnelIn:  '#00e5ff',
-  tunnelOut: '#ff4081',
-  rocket:    '#e05c3a',
-  rocketFin: '#c9963a'
+
+// Colour palettes for tiles — top face + left face + right face
+var TPAL = {
+  tee:    {top:['#6ad060','#5ac050','#4ab040'], L:'#3a8030', R:'#2a6020'},
+  fair:   {top:['#4ab840','#42a838','#3a9830'], L:'#2a7020', R:'#1a5010'},
+  rough:  {top:['#2a7020','#267018','#226010'], L:'#1a4a10', R:'#0e3008'},
+  sand:   {top:['#e8d890','#dcc878','#d0b860'], L:'#b89840', R:'#907830'},
+  water:  {top:['#2060c0','#1858b0','#1050a0'], L:'#0a3880', R:'#062860', anim:true},
+  green:  {top:['#8ae870','#7ad860','#6ac850'], L:'#4ab030', R:'#2a8018'},
+  bridge: {top:['#c8a870','#b89858','#a88848'], L:'#806030', R:'#604020'},
+  path:   {top:['#c8c8a0','#b8b890','#a8a880'], L:'#808060', R:'#606040'}
 };
 
-function draw() {
-  if (!HOLE) return;
-  ctx.clearRect(0,0,CW,CH);
+var FRAME = 0; // for water animation
 
-  // Sky/grass background
-  ctx.fillStyle = PALETTE.grass;
-  ctx.fillRect(0,0,CW,CH);
+function drawTile(gx, gy, ttype) {
+  if (ttype===T.VOID) return;
+  var pal = TPAL[ttype]||TPAL.fair;
+  // Four corners of top face in screen coords
+  var tl = w2s(gx,   gy);
+  var tr = w2s(gx+1, gy);
+  var bl = w2s(gx,   gy+1);
+  var br = w2s(gx+1, gy+1);
 
-  // Draw floor tiles (checkerboard felt)
-  HOLE.floor.forEach(function(f) {
-    var tileSize = CW * 0.08;
-    for (var ty = f.y; ty < f.y+f.h; ty += tileSize) {
-      for (var tx = f.x; tx < f.x+f.w; tx += tileSize) {
-        var col = (Math.floor((tx-f.x)/tileSize) + Math.floor((ty-f.y)/tileSize)) % 2;
-        ctx.fillStyle = col ? PALETTE.felt : PALETTE.feltAlt;
-        ctx.fillRect(tx, ty, Math.min(tileSize, f.x+f.w-tx), Math.min(tileSize, f.y+f.h-ty));
-      }
-    }
-  });
+  // Top face
+  var topIdx = (FRAME%3===0&&pal.anim)?1:0;
+  ctx.beginPath();
+  ctx.moveTo(tl.x,tl.y); ctx.lineTo(tr.x,tr.y);
+  ctx.lineTo(br.x,br.y); ctx.lineTo(bl.x,bl.y);
+  ctx.closePath();
+  ctx.fillStyle = pal.top[topIdx];
+  ctx.fill();
 
-  // Draw walls as chunky wood blocks
-  HOLE.walls.forEach(drawWall);
+  // Texture on top face
+  drawTileTexture(gx,gy,ttype,tl,tr,br,bl);
 
-  // Tunnel markers
-  if (HOLE.tunnelIn)  drawTunnelMarker(HOLE.tunnelIn,  PALETTE.tunnelIn,  'IN');
-  if (HOLE.tunnelOut) drawTunnelMarker(HOLE.tunnelOut, PALETTE.tunnelOut, 'OUT');
+  // Left face (south-west wall)
+  ctx.beginPath();
+  ctx.moveTo(bl.x,bl.y); ctx.lineTo(br.x,br.y);
+  ctx.lineTo(br.x,br.y+TILE_DEPTH); ctx.lineTo(bl.x,bl.y+TILE_DEPTH);
+  ctx.closePath();
+  ctx.fillStyle=pal.L; ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.lineWidth=0.5; ctx.stroke();
 
-  // Tee marker
-  drawTee();
+  // Right face (south-east wall)
+  ctx.beginPath();
+  ctx.moveTo(br.x,br.y); ctx.lineTo(tr.x,tr.y);
+  ctx.lineTo(tr.x,tr.y+TILE_DEPTH); ctx.lineTo(br.x,br.y+TILE_DEPTH);
+  ctx.closePath();
+  ctx.fillStyle=pal.R; ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.lineWidth=0.5; ctx.stroke();
 
-  // Cup
-  drawCup();
-
-  // Obstacles
-  HOLE.obstacles.forEach(drawObstacle);
-
-  // Aim arrow
-  if (STATE.drag.active && !STATE.ball.moving && !STATE.holeComplete) drawAim();
-
-  // Ball
-  if (!STATE.ball.pocketed) drawBall();
-  else drawBallPocket();
+  // Top edge outline
+  ctx.beginPath();
+  ctx.moveTo(tl.x,tl.y); ctx.lineTo(tr.x,tr.y);
+  ctx.lineTo(br.x,br.y); ctx.lineTo(bl.x,bl.y); ctx.closePath();
+  ctx.strokeStyle='rgba(0,0,0,0.18)'; ctx.lineWidth=0.7; ctx.stroke();
 }
 
-function drawWall(w) {
-  var depth = 7; // 3D depth pixels
-  // Top face
-  ctx.fillStyle = PALETTE.wallTop;
-  ctx.fillRect(w.x, w.y, w.w, w.h);
-  // Right shadow face
-  ctx.fillStyle = PALETTE.wallSide;
-  ctx.fillRect(w.x+w.w, w.y+depth, depth, w.h);
-  // Bottom shadow face
-  ctx.fillRect(w.x+depth, w.y+w.h, w.w, depth);
-  // Edge outline
-  ctx.strokeStyle = PALETTE.wallEdge;
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(w.x, w.y, w.w, w.h);
-  // Wood grain lines
-  ctx.strokeStyle = 'rgba(0,0,0,0.12)';
-  ctx.lineWidth = 1;
-  var grainStep = 6;
-  if (w.w > w.h) {
-    // horizontal wall — vertical grains
-    for (var gx = w.x + grainStep; gx < w.x+w.w; gx += grainStep) {
-      ctx.beginPath(); ctx.moveTo(gx,w.y); ctx.lineTo(gx,w.y+w.h); ctx.stroke();
+function drawTileTexture(gx,gy,ttype,tl,tr,br,bl) {
+  // Subtle texture patterns per tile type
+  var cx=(tl.x+tr.x+br.x+bl.x)/4, cy=(tl.y+tr.y+br.y+bl.y)/4;
+  if (ttype===T.ROUGH) {
+    // Stipple dots
+    ctx.fillStyle='rgba(0,0,0,0.1)';
+    var offsets=[[0.3,0.2],[0.7,0.4],[0.2,0.7],[0.6,0.6],[0.5,0.2]];
+    offsets.forEach(function(o) {
+      var p=lerpTile(gx,gy,o[0],o[1]);
+      ctx.beginPath(); ctx.arc(p.x,p.y,1.2,0,Math.PI*2); ctx.fill();
+    });
+  } else if (ttype===T.SAND) {
+    ctx.fillStyle='rgba(255,255,255,0.15)';
+    for(var si=0;si<4;si++){
+      var p=lerpTile(gx,gy,(si%2)*0.5+0.2,Math.floor(si/2)*0.5+0.2);
+      ctx.beginPath(); ctx.arc(p.x,p.y,1.5,0,Math.PI*2); ctx.fill();
     }
-  } else {
-    for (var gy = w.y + grainStep; gy < w.y+w.h; gy += grainStep) {
-      ctx.beginPath(); ctx.moveTo(w.x,gy); ctx.lineTo(w.x+w.w,gy); ctx.stroke();
+  } else if (ttype===T.WATER) {
+    // Shimmer lines
+    var phase = (FRAME*0.04+gx*0.3+gy*0.7)%(Math.PI*2);
+    ctx.strokeStyle='rgba(255,255,255,'+(0.08+Math.sin(phase)*0.05)+')';
+    ctx.lineWidth=1;
+    ctx.beginPath();
+    var p1=lerpTile(gx,gy,0.2,0.4), p2=lerpTile(gx,gy,0.8,0.4);
+    ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+    ctx.beginPath();
+    var p3=lerpTile(gx,gy,0.1,0.6), p4=lerpTile(gx,gy,0.6,0.6);
+    ctx.moveTo(p3.x,p3.y); ctx.lineTo(p4.x,p4.y); ctx.stroke();
+  } else if (ttype===T.GREEN) {
+    // Fine grain lines
+    ctx.strokeStyle='rgba(255,255,255,0.07)'; ctx.lineWidth=0.8;
+    for(var gi=0;gi<3;gi++){
+      var pp1=lerpTile(gx,gy,0.1,0.3+gi*0.2), pp2=lerpTile(gx,gy,0.9,0.3+gi*0.2);
+      ctx.beginPath(); ctx.moveTo(pp1.x,pp1.y); ctx.lineTo(pp2.x,pp2.y); ctx.stroke();
+    }
+  } else if (ttype===T.BRIDGE) {
+    // Plank lines
+    ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.lineWidth=1;
+    for(var bi=0;bi<3;bi++){
+      var bp1=lerpTile(gx,gy,0.1,0.25+bi*0.25), bp2=lerpTile(gx,gy,0.9,0.25+bi*0.25);
+      ctx.beginPath(); ctx.moveTo(bp1.x,bp1.y); ctx.lineTo(bp2.x,bp2.y); ctx.stroke();
     }
   }
 }
 
-function drawTunnelMarker(t, color, label) {
-  ctx.beginPath();
-  ctx.arc(t.x, t.y, t.r, 0, Math.PI*2);
-  ctx.fillStyle = 'rgba(0,0,0,0.6)';
-  ctx.fill();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 3;
-  ctx.stroke();
-  ctx.fillStyle = color;
-  ctx.font = 'bold ' + Math.round(t.r*0.7) + 'px "Press Start 2P"';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(label, t.x, t.y);
+function lerpTile(gx,gy,u,v) {
+  // Bilinear interpolation within a tile face
+  var tl=w2s(gx,gy), tr=w2s(gx+1,gy), bl=w2s(gx,gy+1), br=w2s(gx+1,gy+1);
+  return {
+    x: tl.x*(1-u)*(1-v) + tr.x*u*(1-v) + bl.x*(1-u)*v + br.x*u*v,
+    y: tl.y*(1-u)*(1-v) + tr.y*u*(1-v) + bl.y*(1-u)*v + br.y*u*v
+  };
 }
 
-function drawTee() {
-  var t = HOLE.tee;
-  var r = CW * 0.042;
-  ctx.beginPath();
-  ctx.arc(t.x, t.y, r, 0, Math.PI*2);
-  ctx.fillStyle = PALETTE.teeGreen;
-  ctx.fill();
-  ctx.strokeStyle = PALETTE.teeBorder;
-  ctx.lineWidth = 2;
-  ctx.setLineDash([4,3]);
-  ctx.stroke();
-  ctx.setLineDash([]);
-}
+// ============================================================
+// OBSTACLE SPRITES — iso pixel art
+// ============================================================
+function drawTree(wx,wy) {
+  var base=w2s(wx,wy);
+  var shadow=w2s(wx+0.1,wy+0.1);
+  var h=TH*2.2;
 
-function drawCup() {
-  var c = HOLE.cup;
-  // Outer shadow
-  ctx.beginPath();
-  ctx.arc(c.x+2, c.y+2, c.r, 0, Math.PI*2);
-  ctx.fillStyle = 'rgba(0,0,0,0.4)';
-  ctx.fill();
-  // Cup hole
-  ctx.beginPath();
-  ctx.arc(c.x, c.y, c.r, 0, Math.PI*2);
-  ctx.fillStyle = PALETTE.cup;
-  ctx.fill();
-  ctx.strokeStyle = '#333';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  // Flag pole
-  var poleH = c.r * 3.2;
-  ctx.fillStyle = PALETTE.flagPole;
-  ctx.fillRect(c.x - 1, c.y - poleH, 2.5, poleH);
-  // Flag
-  ctx.beginPath();
-  ctx.moveTo(c.x + 1.5, c.y - poleH);
-  ctx.lineTo(c.x + c.r * 2.2, c.y - poleH + c.r * 0.9);
-  ctx.lineTo(c.x + 1.5, c.y - poleH + c.r * 1.8);
-  ctx.fillStyle = PALETTE.flagFill;
-  ctx.fill();
-  // Ð on flag
-  ctx.fillStyle = '#0d3a10';
-  ctx.font = 'bold ' + Math.round(c.r*0.9) + 'px Georgia';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('\u00D0', c.x + c.r * 1.1, c.y - poleH + c.r * 0.9);
-}
-
-function drawBall() {
-  var b = STATE.ball;
-  var r = b.r;
   // Shadow
   ctx.beginPath();
-  ctx.arc(b.x+2, b.y+3, r*0.85, 0, Math.PI*2);
-  ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  ctx.fill();
-  // Body
+  ctx.ellipse(shadow.x+4,shadow.y+8,TW*0.22,TH*0.18,0,0,Math.PI*2);
+  ctx.fillStyle='rgba(0,0,0,0.22)'; ctx.fill();
+
+  // Trunk
+  var tw=TW*0.06;
+  ctx.fillStyle='#7a4a18';
   ctx.beginPath();
-  ctx.arc(b.x, b.y, r, 0, Math.PI*2);
-  ctx.fillStyle = PALETTE.ballGold;
-  ctx.fill();
-  ctx.strokeStyle = PALETTE.ballRim;
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  // Inner ring
-  ctx.beginPath();
-  ctx.arc(b.x, b.y, r*0.7, 0, Math.PI*2);
-  ctx.fillStyle = PALETTE.ballInner;
-  ctx.fill();
-  // Ð symbol
-  ctx.fillStyle = PALETTE.ballSym;
-  ctx.font = 'bold ' + Math.round(r*1.15) + 'px Georgia';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('\u00D0', b.x, b.y+1);
-  // Shine
-  ctx.beginPath();
-  ctx.arc(b.x - r*0.3, b.y - r*0.3, r*0.22, 0, Math.PI*2);
-  ctx.fillStyle = 'rgba(255,255,255,0.65)';
-  ctx.fill();
+  ctx.moveTo(base.x-tw,base.y-h*0.28);
+  ctx.lineTo(base.x+tw,base.y-h*0.28);
+  ctx.lineTo(base.x+tw*0.7,base.y+2);
+  ctx.lineTo(base.x-tw*0.7,base.y+2);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='#4a2808'; ctx.lineWidth=0.8; ctx.stroke();
+
+  // Canopy layers (3 tiers for pixel depth)
+  var tiers=[
+    {y:h*0.72, r:TW*0.28, c:'#1a7a10'},
+    {y:h*0.52, r:TW*0.22, c:'#228a18'},
+    {y:h*0.34, r:TW*0.16, c:'#2a9a20'}
+  ];
+  tiers.forEach(function(tier) {
+    // Dark side
+    ctx.beginPath();
+    ctx.ellipse(base.x+TW*0.04,base.y-tier.y+2,tier.r*0.9,tier.r*0.5,0,0,Math.PI*2);
+    ctx.fillStyle=shadeDark(tier.c,30); ctx.fill();
+    // Main
+    ctx.beginPath();
+    ctx.ellipse(base.x,base.y-tier.y,tier.r,tier.r*0.55,0,0,Math.PI*2);
+    ctx.fillStyle=tier.c; ctx.fill();
+    // Highlight
+    ctx.beginPath();
+    ctx.ellipse(base.x-TW*0.05,base.y-tier.y-2,tier.r*0.5,tier.r*0.28,-0.2,0,Math.PI*2);
+    ctx.fillStyle=shadeBright(tier.c,25); ctx.fill();
+  });
 }
 
-function drawBallPocket() {
-  // Ball sinking — green glow at cup
-  var c = HOLE.cup;
+function drawWindmillSprite(obs) {
+  var base=w2s(obs.wx,obs.wy);
+  var a=obs._angle||0;
+  var bl=obs.bladeR*(TW/2);
+  var h=TH*2.0;
+
+  // Shadow
   ctx.beginPath();
-  ctx.arc(c.x, c.y, HOLE.cup.r * 0.6, 0, Math.PI*2);
-  ctx.fillStyle = 'rgba(57,255,20,0.7)';
-  ctx.fill();
-}
+  ctx.ellipse(base.x+4,base.y+8,TW*0.2,TH*0.15,0,0,Math.PI*2);
+  ctx.fillStyle='rgba(0,0,0,0.2)'; ctx.fill();
 
-function drawAim() {
-  var b  = STATE.ball;
-  // Direction = drag start → current, shoot opposite
-  var dx = STATE.drag.sx - STATE.drag.cx;
-  var dy = STATE.drag.sy - STATE.drag.cy;
-  var power = Math.min(Math.sqrt(dx*dx+dy*dy), 120);
-  if (power < 4) return;
-  var nx = dx/power, ny = dy/power;
-
-  // Dotted trajectory line
-  ctx.save();
-  ctx.setLineDash([6, 8]);
-  ctx.strokeStyle = PALETTE.aimLine;
-  ctx.lineWidth = 2;
+  // Tower
+  ctx.fillStyle='#d0c0a0';
   ctx.beginPath();
-  ctx.moveTo(b.x, b.y);
-  ctx.lineTo(b.x + nx*power*0.9, b.y + ny*power*0.9);
-  ctx.stroke();
-  ctx.restore();
-
-  // Arrowhead
-  var ex = b.x + nx*power*0.9, ey = b.y + ny*power*0.9;
+  ctx.moveTo(base.x-TW*0.08,base.y-h);
+  ctx.lineTo(base.x+TW*0.08,base.y-h);
+  ctx.lineTo(base.x+TW*0.12,base.y);
+  ctx.lineTo(base.x-TW*0.12,base.y);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='#a09070'; ctx.lineWidth=1; ctx.stroke();
+  // Tower shading
+  ctx.fillStyle='rgba(0,0,0,0.15)';
   ctx.beginPath();
-  ctx.moveTo(ex, ey);
-  ctx.lineTo(ex - nx*12 - ny*7, ey - ny*12 + nx*7);
-  ctx.lineTo(ex - nx*12 + ny*7, ey - ny*12 - nx*7);
-  ctx.fillStyle = PALETTE.aimDot;
-  ctx.fill();
+  ctx.moveTo(base.x+TW*0.08,base.y-h);
+  ctx.lineTo(base.x+TW*0.12,base.y);
+  ctx.lineTo(base.x+TW*0.04,base.y);
+  ctx.closePath(); ctx.fill();
 
-  // Power bar below ball
-  var pct = power/120;
-  var barW = 60, barH = 6, bx = b.x - barW/2, by = b.y + b.r + 8;
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
-  ctx.fillRect(bx, by, barW, barH);
-  ctx.fillStyle = pct>0.75 ? PALETTE.power2 : pct>0.45 ? PALETTE.power1 : PALETTE.power0;
-  ctx.fillRect(bx, by, barW*pct, barH);
-  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(bx, by, barW, barH);
-
-  // Drag dot
-  ctx.beginPath();
-  ctx.arc(STATE.drag.cx, STATE.drag.cy, 5, 0, Math.PI*2);
-  ctx.fillStyle = 'rgba(255,255,255,0.7)';
-  ctx.fill();
-}
-
-function drawObstacle(o) {
-  if (o.type === 'windmill') drawWindmillSprite(o);
-  else if (o.type === 'shibe' || o.type === 'shibe_move') drawShibeSprite(o._x||o.x, o._y||o.y, o.r);
-  else if (o.type === 'rocket') drawRocketSprite(o._x||o.x, o._y||o.y, o.r, o.vy);
-}
-
-function drawWindmillSprite(o) {
-  var cx = o.x, cy = o.y, bl = o.bladeLen, a = o.angle||0;
-  // Base
-  ctx.fillStyle = PALETTE.wallSide;
-  ctx.fillRect(cx-5, cy-5, 10, 10);
   // Blades
-  for (var i=0;i<4;i++) {
-    var ang = a + i*Math.PI/2;
-    var ex = cx+Math.cos(ang)*bl, ey = cy+Math.sin(ang)*bl;
+  for(var i=0;i<4;i++){
+    var ang=a+i*Math.PI/2;
+    // Iso-project the blade tip
+    var bwx=obs.wx+Math.cos(ang)*obs.bladeR;
+    var bwy=obs.wy+Math.sin(ang)*obs.bladeR;
+    var tip=w2s(bwx,bwy);
+    var cen=w2s(obs.wx,obs.wy);
+    var screenCen={x:base.x, y:base.y-h*0.85};
+    // Blade from center to tip (in screen space, adjusted for iso)
+    var bsx=base.x+(tip.x-cen.x)*0.7;
+    var bsy=base.y-h*0.85+(tip.y-cen.y)*0.7;
     ctx.beginPath();
-    ctx.moveTo(cx,cy);
-    ctx.lineTo(ex,ey);
-    ctx.strokeStyle = PALETTE.wallTop;
-    ctx.lineWidth = 6;
-    ctx.lineCap = 'round';
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(ex,ey,5,0,Math.PI*2);
-    ctx.fillStyle = PALETTE.wallEdge;
-    ctx.fill();
+    ctx.moveTo(base.x, base.y-h*0.85);
+    ctx.lineTo(bsx, bsy);
+    ctx.strokeStyle=i%2===0?'#c07030':'#a05020';
+    ctx.lineWidth=5; ctx.lineCap='round'; ctx.stroke();
+    ctx.beginPath(); ctx.arc(bsx,bsy,3,0,Math.PI*2);
+    ctx.fillStyle='#3a1a04'; ctx.fill();
   }
   // Hub
-  ctx.beginPath();
-  ctx.arc(cx,cy,7,0,Math.PI*2);
-  ctx.fillStyle = '#4a2408';
-  ctx.fill();
-  ctx.strokeStyle = PALETTE.wallTop;
-  ctx.lineWidth=2;
-  ctx.stroke();
-}
-
-function drawShibeSprite(x, y, r) {
-  // Body
-  ctx.beginPath();
-  ctx.arc(x,y,r,0,Math.PI*2);
-  ctx.fillStyle = PALETTE.shibeBody;
-  ctx.fill();
-  ctx.strokeStyle = PALETTE.shibeDark;
-  ctx.lineWidth=2;
-  ctx.stroke();
-  // Ears
-  ctx.beginPath();
-  ctx.moveTo(x-r*0.5,y-r*0.7);
-  ctx.lineTo(x-r*0.15,y-r*1.2);
-  ctx.lineTo(x+r*0.1,y-r*0.8);
-  ctx.fillStyle=PALETTE.shibeDark; ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(x+r*0.5,y-r*0.7);
-  ctx.lineTo(x+r*0.15,y-r*1.2);
-  ctx.lineTo(x-r*0.1,y-r*0.8);
-  ctx.fillStyle=PALETTE.shibeDark; ctx.fill();
-  // Eyes
-  ctx.fillStyle='#0d0d0d';
-  ctx.beginPath(); ctx.arc(x-r*0.28,y-r*0.15,r*0.13,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x+r*0.28,y-r*0.15,r*0.13,0,Math.PI*2); ctx.fill();
-  // Nose
-  ctx.beginPath(); ctx.arc(x,y+r*0.15,r*0.12,0,Math.PI*2); ctx.fillStyle='#2d0d0d'; ctx.fill();
-  // Blush
-  ctx.beginPath(); ctx.arc(x-r*0.4,y+r*0.1,r*0.15,0,Math.PI*2); ctx.fillStyle='rgba(255,120,100,0.35)'; ctx.fill();
-  ctx.beginPath(); ctx.arc(x+r*0.4,y+r*0.1,r*0.15,0,Math.PI*2); ctx.fill();
-}
-
-function drawRocketSprite(x, y, r, vy) {
-  var dir = vy >= 0 ? 1 : -1;
-  // Body
-  ctx.save();
-  ctx.translate(x,y);
-  ctx.rotate(dir>0 ? Math.PI/2 : -Math.PI/2);
-  // Nose
-  ctx.beginPath();
-  ctx.moveTo(0,-r*1.8);
-  ctx.lineTo(r*0.6,0);
-  ctx.lineTo(-r*0.6,0);
-  ctx.fillStyle='#f0e8d0'; ctx.fill();
-  // Body
-  ctx.fillStyle=PALETTE.rocket;
-  ctx.fillRect(-r*0.5,0,r,r*1.8);
-  // Window
-  ctx.beginPath(); ctx.arc(0,r*0.6,r*0.3,0,Math.PI*2); ctx.fillStyle='#00e5ff'; ctx.fill();
-  // Fins
-  ctx.fillStyle=PALETTE.rocketFin;
-  ctx.beginPath(); ctx.moveTo(-r*0.5,r*1.4); ctx.lineTo(-r,r*1.9); ctx.lineTo(-r*0.5,r*1.8); ctx.fill();
-  ctx.beginPath(); ctx.moveTo( r*0.5,r*1.4); ctx.lineTo( r,r*1.9); ctx.lineTo( r*0.5,r*1.8); ctx.fill();
-  // Fire
-  ctx.beginPath();
-  ctx.moveTo(-r*0.35,r*1.8);
-  ctx.lineTo(0,r*2.4+(Math.random()*r*0.3));
-  ctx.lineTo(r*0.35,r*1.8);
+  ctx.beginPath(); ctx.arc(base.x,base.y-h*0.85,6,0,Math.PI*2);
+  ctx.fillStyle='#2a0a00'; ctx.fill();
+  ctx.strokeStyle='#c07030'; ctx.lineWidth=2; ctx.stroke();
+  ctx.beginPath(); ctx.arc(base.x,base.y-h*0.85,2.5,0,Math.PI*2);
   ctx.fillStyle='#f0c060'; ctx.fill();
+}
+
+function drawShibeSprite(wx,wy) {
+  var s=w2s(wx,wy);
+  var r=TW*0.22;
+
+  // Shadow
+  ctx.beginPath();
+  ctx.ellipse(s.x+3,s.y+6,r*1.1,r*0.45,0,0,Math.PI*2);
+  ctx.fillStyle='rgba(0,0,0,0.2)'; ctx.fill();
+
+  // Body
+  ctx.beginPath(); ctx.ellipse(s.x,s.y-r*0.3,r,r*0.65,0,0,Math.PI*2);
+  ctx.fillStyle='#f0a030'; ctx.fill();
+  ctx.strokeStyle='#b07020'; ctx.lineWidth=1.5; ctx.stroke();
+  // Shading
+  ctx.beginPath(); ctx.ellipse(s.x+r*0.2,s.y-r*0.3+r*0.15,r*0.55,r*0.4,0.3,0,Math.PI*2);
+  ctx.fillStyle='rgba(0,0,0,0.1)'; ctx.fill();
+
+  // Head
+  var hx=s.x-r*0.1, hy=s.y-r*1.05;
+  ctx.beginPath(); ctx.arc(hx,hy,r*0.68,0,Math.PI*2);
+  ctx.fillStyle='#f0a030'; ctx.fill();
+  ctx.strokeStyle='#b07020'; ctx.lineWidth=1.2; ctx.stroke();
+
+  // Ears
+  ctx.fillStyle='#b07020';
+  ctx.beginPath(); ctx.moveTo(hx-r*0.4,hy-r*0.5); ctx.lineTo(hx-r*0.15,hy-r*0.95); ctx.lineTo(hx+r*0.05,hy-r*0.55); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(hx+r*0.35,hy-r*0.5); ctx.lineTo(hx+r*0.15,hy-r*0.95); ctx.lineTo(hx-r*0.05,hy-r*0.55); ctx.fill();
+
+  // Eyes
+  ctx.fillStyle='#111';
+  ctx.beginPath(); ctx.arc(hx-r*0.22,hy-r*0.12,r*0.13,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(hx+r*0.22,hy-r*0.12,r*0.13,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.7)';
+  ctx.beginPath(); ctx.arc(hx-r*0.17,hy-r*0.18,r*0.05,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(hx+r*0.27,hy-r*0.18,r*0.05,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(hx,hy+r*0.12,r*0.12,0,Math.PI*2);
+  ctx.fillStyle='#2d0a0a'; ctx.fill();
+  ctx.beginPath(); ctx.arc(hx-r*0.35,hy+r*0.1,r*0.14,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,80,60,0.3)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(hx+r*0.35,hy+r*0.1,r*0.14,0,Math.PI*2); ctx.fill();
+}
+
+function drawPipeMarker(wx,wy,isIn) {
+  var s=w2s(wx,wy);
+  var r=TW*0.28;
+  var color=isIn?'#00e5ff':'#ff4081';
+
+  // Pipe body (iso cylinder look)
+  ctx.beginPath();
+  ctx.ellipse(s.x,s.y,r,r*0.45,0,0,Math.PI*2);
+  ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(s.x,s.y-r*0.3,r,r*0.45,0,0,Math.PI*2);
+  ctx.fillStyle=color; ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.4)'; ctx.lineWidth=2; ctx.stroke();
+
+  // Label
+  ctx.fillStyle='#fff';
+  ctx.font='bold '+Math.round(r*0.55)+'px "Press Start 2P"';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(isIn?'IN':'OUT', s.x, s.y-r*0.28);
+}
+
+function drawCupSprite(wx,wy) {
+  var s=w2s(wx,wy);
+  var r=TW*0.28;
+
+  // Glow
+  var grd=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,r*2.2);
+  grd.addColorStop(0,'rgba(57,255,20,0.22)');
+  grd.addColorStop(1,'transparent');
+  ctx.beginPath(); ctx.arc(s.x,s.y,r*2.2,0,Math.PI*2);
+  ctx.fillStyle=grd; ctx.fill();
+
+  // Hole shadow
+  ctx.beginPath(); ctx.ellipse(s.x+2,s.y+3,r,r*0.48,0,0,Math.PI*2);
+  ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.fill();
+  // Hole
+  ctx.beginPath(); ctx.ellipse(s.x,s.y,r,r*0.45,0,0,Math.PI*2);
+  ctx.fillStyle='#050505'; ctx.fill();
+  ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=2; ctx.stroke();
+
+  // Flag pole
+  var ph=TH*3.8;
+  ctx.fillStyle='#f0e8d0'; ctx.fillRect(s.x-1.5,s.y-ph,3,ph);
+  // Flag
+  ctx.beginPath();
+  ctx.moveTo(s.x+1.5,s.y-ph);
+  ctx.lineTo(s.x+r*2.8,s.y-ph+r*1.1);
+  ctx.lineTo(s.x+1.5,s.y-ph+r*2.2);
+  ctx.fillStyle='#39ff14'; ctx.fill();
+  ctx.fillStyle='#0a2008';
+  ctx.font='bold '+Math.round(r*0.95)+'px Georgia';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('\u00D0',s.x+r*1.4,s.y-ph+r*1.1);
+}
+
+function drawBallSprite() {
+  var b=G.ball;
+  if (b.pocketed) {
+    // Sinking glow at cup
+    var cs=w2s(HOLE.cup.wx,HOLE.cup.wy);
+    ctx.beginPath(); ctx.arc(cs.x,cs.y,TW*0.14,0,Math.PI*2);
+    ctx.fillStyle='rgba(57,255,20,0.75)'; ctx.fill();
+    return;
+  }
+  var s=w2s(b.wx,b.wy);
+  var r=TW*0.19;
+
+  // Drop shadow
+  ctx.beginPath(); ctx.ellipse(s.x+3,s.y+4,r*1.1,r*0.42,0,0,Math.PI*2);
+  ctx.fillStyle='rgba(0,0,0,0.3)'; ctx.fill();
+
+  // Ball body
+  ctx.beginPath(); ctx.arc(s.x,s.y,r,0,Math.PI*2);
+  ctx.fillStyle='#f0c060'; ctx.fill();
+  ctx.strokeStyle='#b08020'; ctx.lineWidth=2; ctx.stroke();
+
+  // Inner ring
+  ctx.beginPath(); ctx.arc(s.x,s.y,r*0.7,0,Math.PI*2);
+  ctx.fillStyle='#f8d870'; ctx.fill();
+
+  // Ð
+  ctx.fillStyle='#0a2008';
+  ctx.font='bold '+Math.round(r*1.1)+'px Georgia';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('\u00D0',s.x,s.y+1);
+
+  // Shine
+  ctx.beginPath(); ctx.arc(s.x-r*0.3,s.y-r*0.32,r*0.22,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,0.7)'; ctx.fill();
+
+  // Zone ring indicator
+  var fr=getFric(b.wx,b.wy);
+  var rc=fr>0.985?'#39ff14':fr>0.960?'#f0c060':fr>0.850?'#ff6040':'#0080ff';
+  ctx.beginPath(); ctx.arc(s.x,s.y,r+3,0,Math.PI*2);
+  ctx.strokeStyle=rc; ctx.lineWidth=1.5; ctx.globalAlpha=0.5; ctx.stroke(); ctx.globalAlpha=1;
+}
+
+function drawTeeMarker(wx,wy) {
+  var s=w2s(wx,wy);
+  var r=TW*0.28;
+  ctx.beginPath(); ctx.ellipse(s.x,s.y,r,r*0.45,0,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,0.15)'; ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=2;
+  ctx.setLineDash([4,3]); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle='rgba(255,255,255,0.35)';
+  ctx.font='bold '+Math.round(r*0.42)+'px "Press Start 2P"';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('TEE',s.x,s.y);
+}
+
+function drawAimLine() {
+  var b=G.ball;
+  var dx=G.drag.sx-G.drag.cx, dy=G.drag.sy-G.drag.cy;
+  var power=Math.sqrt(dx*dx+dy*dy);
+  if(power<4)return;
+  var maxP=220, pct=Math.min(power,maxP)/maxP;
+  var nx=dx/power, ny=dy/power;
+
+  // Convert to iso direction: shoot in world space, show in screen space
+  var bs=w2s(b.wx,b.wy);
+  var rayLen=Math.max(VW,VH)*1.5;
+
+  ctx.save();
+  ctx.setLineDash([8,11]);
+  ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(bs.x,bs.y);
+  ctx.lineTo(bs.x+nx*rayLen, bs.y+ny*rayLen); ctx.stroke();
   ctx.restore();
+
+  var lc=pct>0.75?'#ff6040':pct>0.45?'#f0c060':'#39ff14';
+  ctx.strokeStyle=lc; ctx.lineWidth=2.5;
+  ctx.beginPath(); ctx.moveTo(bs.x,bs.y);
+  ctx.lineTo(bs.x+nx*pct*maxP*0.9, bs.y+ny*pct*maxP*0.9); ctx.stroke();
+
+  // Arrow
+  var ex=bs.x+nx*pct*maxP*0.9, ey=bs.y+ny*pct*maxP*0.9;
+  ctx.beginPath();
+  ctx.moveTo(ex,ey);
+  ctx.lineTo(ex-nx*14-ny*8, ey-ny*14+nx*8);
+  ctx.lineTo(ex-nx*14+ny*8, ey-ny*14-nx*8);
+  ctx.fillStyle='rgba(255,255,255,0.85)'; ctx.fill();
+
+  // Drag dots
+  ctx.beginPath(); ctx.arc(G.drag.sx,G.drag.sy,4,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,0.3)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(G.drag.cx,G.drag.cy,5,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,0.6)'; ctx.fill();
+
+  // Power bar
+  var bW=70, bH=7, bx=bs.x-bW/2, by=bs.y+TW*0.22+8;
+  ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(bx,by,bW,bH);
+  ctx.fillStyle=lc; ctx.fillRect(bx,by,bW*pct,bH);
+  ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1; ctx.strokeRect(bx,by,bW,bH);
+}
+
+function drawMallet() {
+  if (!G.active||G.paused) return;
+  var x=G.mouse.x, y=G.mouse.y;
+  var angle=-Math.PI/5;
+  if (G.drag.on) {
+    var dx=G.drag.sx-G.drag.cx, dy=G.drag.sy-G.drag.cy;
+    if (Math.sqrt(dx*dx+dy*dy)>4) angle=Math.atan2(dy,dx)+Math.PI;
+  }
+  var hl=TW*0.55, pr=TW*0.14;
+  ctx.save(); ctx.translate(x,y); ctx.rotate(angle);
+  // Handle
+  var hg=ctx.createLinearGradient(0,0,0,hl);
+  hg.addColorStop(0,'#d0d0d0'); hg.addColorStop(0.5,'#909090'); hg.addColorStop(1,'#606060');
+  ctx.beginPath(); ctx.roundRect(-3.5,0,7,hl,3);
+  ctx.fillStyle=hg; ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.lineWidth=1; ctx.stroke();
+  // Grip
+  ctx.strokeStyle='rgba(0,0,0,0.18)'; ctx.lineWidth=2;
+  for(var gi=hl*0.45;gi<hl*0.82;gi+=5){
+    ctx.beginPath(); ctx.moveTo(-3.5,gi); ctx.lineTo(3.5,gi); ctx.stroke();
+  }
+  // Paddle
+  var pg=ctx.createRadialGradient(-pr*0.2,-pr*0.2,pr*0.1,0,0,pr);
+  pg.addColorStop(0,'#f0f0f0'); pg.addColorStop(0.6,'#d0d0d0'); pg.addColorStop(1,'#888');
+  ctx.beginPath(); ctx.arc(0,0,pr,0,Math.PI*2);
+  ctx.fillStyle=pg; ctx.fill();
+  ctx.strokeStyle='#444'; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.beginPath(); ctx.arc(0,0,pr*0.6,0,Math.PI*2);
+  ctx.strokeStyle='rgba(0,0,0,0.12)'; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.beginPath(); ctx.arc(-pr*0.28,-pr*0.28,pr*0.18,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,0.6)'; ctx.fill();
+  ctx.restore();
+}
+
+// ============================================================
+// MAIN DRAW
+// ============================================================
+function draw() {
+  if (!HOLE) return;
+  ctx.clearRect(0,0,VW,VH);
+
+  // Sky/grass BG
+  var bgGrad=ctx.createLinearGradient(0,HUD,0,VH);
+  bgGrad.addColorStop(0,'#1a3a10'); bgGrad.addColorStop(1,'#0a1a08');
+  ctx.fillStyle=bgGrad; ctx.fillRect(0,HUD,VW,VH-HUD);
+
+  // Collect tiles for painter's sort
+  var drawCalls=[];
+  var GH=HOLE.grid.length;
+  for(var gy=0;gy<GH;gy++){
+    var GW=HOLE.grid[gy].length;
+    for(var gx=0;gx<GW;gx++){
+      var t=HOLE.grid[gy][gx].t;
+      if(t!==T.VOID) drawCalls.push({gx:gx,gy:gy,t:t,order:gx+gy});
+    }
+  }
+  drawCalls.sort(function(a,b){return a.order-b.order;});
+  drawCalls.forEach(function(d){ drawTile(d.gx,d.gy,d.t); });
+
+  // Tee marker
+  drawTeeMarker(HOLE.tee.wx,HOLE.tee.wy);
+
+  // Cup
+  drawCupSprite(HOLE.cup.wx,HOLE.cup.wy);
+
+  // Pipe markers
+  if (HOLE.pipeIn)  drawPipeMarker(HOLE.pipeIn.wx,  HOLE.pipeIn.wy,  true);
+  if (HOLE.pipeOut) drawPipeMarker(HOLE.pipeOut.wx, HOLE.pipeOut.wy, false);
+
+  // Obstacles sorted by painter's order too
+  var obsCalls=HOLE.obstacles.slice().sort(function(a,b){
+    return (a.wx+a.wy)-(b.wx+b.wy);
+  });
+  obsCalls.forEach(function(o){
+    if(o.type==='tree')     drawTree(o.wx,o.wy);
+    else if(o.type==='windmill') drawWindmillSprite(o);
+    else if(o.type==='shibe')    drawShibeSprite(o._wx||o.wx, o._wy||o.wy);
+  });
+
+  // Aim
+  if (G.drag.on&&!G.ball.moving&&!G.holeDone) drawAimLine();
+
+  // Ball (always on top)
+  drawBallSprite();
+
+  // Mallet cursor
+  drawMallet();
 }
 
 // ============================================================
 // INPUT
 // ============================================================
-function getPos(e) {
-  var rect = canvas.getBoundingClientRect();
-  var src  = e.touches ? e.touches[0] : e;
-  return {
-    x:(src.clientX-rect.left)*(canvas.width/rect.width),
-    y:(src.clientY-rect.top)*(canvas.height/rect.height)
-  };
+function evPos(e){
+  var r=canvas.getBoundingClientRect(), s=e.touches?e.touches[0]:e;
+  return{x:(s.clientX-r.left)*(VW/r.width),y:(s.clientY-r.top)*(VH/r.height)};
 }
 
-canvas.addEventListener('pointerdown', function(e) {
+canvas.addEventListener('mousemove',function(e){
+  var p=evPos(e); G.mouse.x=p.x; G.mouse.y=p.y;
+  if(G.drag.on){G.drag.cx=p.x;G.drag.cy=p.y;}
+});
+canvas.addEventListener('pointerdown',function(e){
   e.preventDefault();
-  if (!STATE.gameActive||STATE.ball.moving||STATE.holeComplete||STATE.paused) return;
-  var p = getPos(e);
-  STATE.drag.active = true;
-  STATE.drag.sx = p.x; STATE.drag.sy = p.y;
-  STATE.drag.cx = p.x; STATE.drag.cy = p.y;
+  if(!G.active||G.ball.moving||G.holeDone||G.paused)return;
+  var p=evPos(e);
+  if(p.y<HUD+8)return;
+  G.drag.on=true; G.drag.sx=p.x; G.drag.sy=p.y; G.drag.cx=p.x; G.drag.cy=p.y;
+  G.mouse.x=p.x; G.mouse.y=p.y;
   setHint('RELEASE TO SHOOT');
 });
-
-canvas.addEventListener('pointermove', function(e) {
+canvas.addEventListener('pointermove',function(e){
   e.preventDefault();
-  if (!STATE.drag.active) return;
-  var p = getPos(e);
-  STATE.drag.cx = p.x; STATE.drag.cy = p.y;
+  var p=evPos(e); G.mouse.x=p.x; G.mouse.y=p.y;
+  if(G.drag.on){G.drag.cx=p.x;G.drag.cy=p.y;}
 });
-
-canvas.addEventListener('pointerup', function(e) {
+canvas.addEventListener('pointerup',function(e){
   e.preventDefault();
-  if (!STATE.drag.active) return;
-  STATE.drag.active = false;
-  var dx = STATE.drag.sx - STATE.drag.cx;
-  var dy = STATE.drag.sy - STATE.drag.cy;
-  var power = Math.sqrt(dx*dx+dy*dy);
-  if (power < 5) { setHint('DRAG TO AIM'); return; }
-  var maxPower = 120;
-  var speed = Math.min(power,maxPower)/maxPower * 14; // TUNED: 18 too fast, 11 too slow, 14 = midpoint
-  var nx = dx/power, ny = dy/power;
-  STATE.ball.vx = nx * speed;
-  STATE.ball.vy = ny * speed;
-  STATE.ball.moving = true;
-  STATE.strokes++;
-  updateHUD();
-  setHint('...');
+  if(!G.drag.on)return;
+  G.drag.on=false;
+  var dx=G.drag.sx-G.drag.cx, dy=G.drag.sy-G.drag.cy;
+  var power=Math.sqrt(dx*dx+dy*dy);
+  if(power<6){setHint('DRAG ANYWHERE · RELEASE TO SHOOT');return;}
+  // Convert screen drag direction to world velocity
+  // In 2:1 iso: screen-x maps to world (x-y), screen-y maps to world (x+y)
+  // Inverse: world_vx = (sx/TW + sy/TH), world_vy = (sy/TH - sx/TW)  (normalized)
+  var nx=dx/power, ny=dy/power;
+  var wvx = nx/TW*2 + ny/TH*2;
+  var wvy = ny/TH*2 - nx/TW*2;
+  var wmag=Math.sqrt(wvx*wvx+wvy*wvy);
+  if(wmag<0.0001){wvx=nx;wvy=ny;wmag=1;}
+  wvx/=wmag; wvy/=wmag;
+  var speed=Math.min(power,220)/220*0.28;
+  G.ball.vx=wvx*speed; G.ball.vy=wvy*speed;
+  G.ball.moving=true; G.strokes++;
+  updateHUD(); setHint('...');
 });
-
-// Touch passthrough
-canvas.addEventListener('touchstart', function(e){e.preventDefault();},{passive:false});
-canvas.addEventListener('touchmove',  function(e){e.preventDefault();},{passive:false});
-canvas.addEventListener('touchend',   function(e){e.preventDefault();},{passive:false});
+canvas.addEventListener('touchstart',function(e){e.preventDefault();},{passive:false});
+canvas.addEventListener('touchmove', function(e){e.preventDefault();},{passive:false});
+canvas.addEventListener('touchend',  function(e){e.preventDefault();},{passive:false});
 
 // ============================================================
 // GAME LOOP
 // ============================================================
-function gameLoop() {
-  if (STATE.gameActive && !STATE.paused && HOLE) {
-    updateObstacles();
-    physicsUpdate();
-    draw();
-  }
+function gameLoop(){
+  FRAME++;
+  if(G.active&&!G.paused&&HOLE){updateObstacles();physUpdate();draw();}
   requestAnimationFrame(gameLoop);
 }
 
 // ============================================================
-// HOLE MANAGEMENT
+// HOLE + GAME MANAGEMENT
 // ============================================================
-function loadHole(idx) {
-  HOLE = scaleHole(HOLES_DEF[idx]);
-  STATE.hole        = idx;
-  STATE.strokes     = 0;
-  STATE.holeComplete= false;
-  STATE.ball.x      = HOLE.tee.x;
-  STATE.ball.y      = HOLE.tee.y;
-  STATE.ball.vx     = 0;
-  STATE.ball.vy     = 0;
-  STATE.ball.moving = false;
-  STATE.ball.pocketed=false;
-  STATE.drag.active = false;
-  updateHUD();
-  setHint('DRAG TO AIM');
+function respawnBall(){
+  G.ball.wx=HOLE.tee.wx; G.ball.wy=HOLE.tee.wy;
+  G.ball.vx=0; G.ball.vy=0;
+  G.ball.moving=false; G.ball.pocketed=false;
+  G.lastDry.wx=HOLE.tee.wx; G.lastDry.wy=HOLE.tee.wy;
+}
+
+function loadHole(idx){
+  buildHole(idx);
+  G.holeIdx=idx; G.strokes=0; G.holeDone=false; G.drag.on=false;
+  respawnBall(); updateHUD(); setHint('DRAG ANYWHERE · RELEASE TO SHOOT');
   showBanner(idx);
 }
 
-function showBanner(idx) {
-  var d = HOLES_DEF[idx];
-  document.getElementById('banner-num').textContent  = 'HOLE ' + (idx+1) + ' OF 9';
-  document.getElementById('banner-name').textContent = d.name;
-  document.getElementById('banner-par').textContent  = 'PAR ' + d.par;
-  var el = document.getElementById('hole-banner');
-  el.classList.add('show');
-  setTimeout(function(){ el.classList.remove('show'); }, 2000);
+function showBanner(idx){
+  var m=META[idx];
+  document.getElementById('bn').textContent='HOLE '+(idx+1)+' OF 9';
+  document.getElementById('bname').textContent=m.name;
+  document.getElementById('bpar').textContent='PAR '+m.par;
+  var el=document.getElementById('banner');
+  el.classList.add('show'); setTimeout(function(){el.classList.remove('show');},2400);
 }
 
-function showHoleComplete() {
-  var par     = HOLES_DEF[STATE.hole].par;
-  var strokes = STATE.strokes;
-  var diff    = strokes - par;
-  var emoji, title;
-  if      (diff <= -2) { emoji='🦅'; title='EAGLE!!';    showSpeech('SUCH EAGLE! MANY SKILL!'); }
-  else if (diff === -1){ emoji='🐦'; title='BIRDIE!';     showSpeech('MUCH BIRDIE! VERY PUTT!'); }
-  else if (diff ===  0){ emoji='⛳'; title='PAR!';        showSpeech('SUCH PAR. WOW.'); }
-  else if (diff ===  1){ emoji='😬'; title='BOGEY';       showSpeech('VERY BOGEY. MUCH TRY.'); }
-  else                 { emoji='😩'; title='+'+diff+' OUCH'; showSpeech('SO MANY STROKES. SUCH EFFORT.'); }
-
-  document.getElementById('hc-emoji').textContent = emoji;
-  document.getElementById('hc-title').textContent = title;
-  document.getElementById('hc-sub').textContent   = strokes + ' stroke' + (strokes!==1?'s':'') + '  ·  par ' + par;
-
-  var btn = document.getElementById('hc-btn');
-  if (STATE.hole >= HOLES_DEF.length-1) {
-    btn.textContent = 'SEE SCORECARD →';
-    btn.onclick = function(){ document.getElementById('ov-hole').style.display='none'; showScorecard(); };
-  } else {
-    btn.textContent = 'NEXT HOLE →';
-    btn.onclick = nextHole;
-  }
-  document.getElementById('ov-hole').style.display = 'flex';
+function showHoleComplete(){
+  var par=META[G.holeIdx].par, s=G.strokes, d=s-par;
+  var emoji,title;
+  if(d<=-2){emoji='🦅';title='EAGLE!!';   showSpeech('SUCH EAGLE! MANY SKILL!');}
+  else if(d===-1){emoji='🐦';title='BIRDIE!'; showSpeech('MUCH BIRDIE! VERY PUTT!');}
+  else if(d===0) {emoji='⛳';title='PAR!';     showSpeech('SUCH PAR. WOW.');}
+  else if(d===1) {emoji='😬';title='BOGEY';    showSpeech('VERY BOGEY. MUCH TRY.');}
+  else           {emoji='😩';title='+'+d;       showSpeech('SO MANY STROKE. WOW.');}
+  document.getElementById('hce').textContent=emoji;
+  document.getElementById('hct').textContent=title;
+  document.getElementById('hcs').textContent=s+' stroke'+(s!==1?'s':'')+' · par '+par;
+  var btn=document.getElementById('hcb');
+  if(G.holeIdx>=META.length-1){
+    btn.textContent='SCORECARD →';
+    btn.onclick=function(){document.getElementById('ov-hole').style.display='none';showScorecard();};
+  }else{btn.textContent='NEXT HOLE →';btn.onclick=nextHole;}
+  document.getElementById('ov-hole').style.display='flex';
 }
 
-function nextHole() {
-  document.getElementById('ov-hole').style.display = 'none';
-  STATE.scores.push(STATE.strokes);
-  STATE.totalPar    += HOLES_DEF[STATE.hole].par;
-  STATE.totalStrokes+= STATE.strokes;
-  if (STATE.hole < HOLES_DEF.length-1) {
-    loadHole(STATE.hole+1);
-  } else {
-    showScorecard();
-  }
+function nextHole(){
+  document.getElementById('ov-hole').style.display='none';
+  G.scores.push(G.strokes); G.totPar+=META[G.holeIdx].par; G.totStrokes+=G.strokes;
+  if(G.holeIdx<META.length-1)loadHole(G.holeIdx+1); else showScorecard();
 }
 
-function showScorecard() {
-  STATE.gameActive = false;
-  var allScores = STATE.scores.slice();
-  if (STATE.holeComplete) allScores.push(STATE.strokes);
-
+function showScorecard(){
+  G.active=false;
+  var all=G.scores.slice(); if(G.holeDone)all.push(G.strokes);
   var html='<tr><th>#</th><th>HOLE</th><th>PAR</th><th>SCORE</th><th>±</th></tr>';
   var tp=0,ts=0;
-  allScores.forEach(function(sc,i){
-    var h=HOLES_DEF[i], d=sc-h.par;
-    var cls=d<0?'sc-under':d>0?'sc-over':'sc-even';
+  all.forEach(function(sc,i){
+    var m=META[i],d=sc-m.par,cls=d<0?'scu':d>0?'sco':'';
     var ds=d===0?'E':d>0?'+'+d:''+d;
-    html+='<tr><td>'+(i+1)+'</td><td class="sc-name">'+h.name+'</td><td>'+h.par+'</td><td class="'+cls+'">'+sc+'</td><td class="'+cls+'">'+ds+'</td></tr>';
-    tp+=h.par; ts+=sc;
+    html+='<tr><td>'+(i+1)+'</td><td class="scn">'+m.name+'</td><td>'+m.par+'</td><td class="'+cls+'">'+sc+'</td><td class="'+cls+'">'+ds+'</td></tr>';
+    tp+=m.par; ts+=sc;
   });
-  document.getElementById('sc-table').innerHTML=html;
-  var td=ts-tp;
-  var tds=td===0?'EVEN':td>0?'+'+td:''+td;
-  document.getElementById('sc-verdict').textContent='TOTAL: '+ts+' ('+tds+')';
-  var msgs=['SUCH SKILL. VERY GOLF. WOW.','MUCH WOW. GOOD ROUND.','VERY TRY. SUCH EFFORT. MANY STROKE.','SO MANY HOLE. SUCH RESILIENCE.'];
-  document.getElementById('sc-msg').textContent = td<=-4?msgs[0]:td<=0?msgs[1]:td<=6?msgs[2]:msgs[3];
-  document.getElementById('ov-scorecard').style.display='flex';
+  document.getElementById('sct').innerHTML=html;
+  var td=ts-tp, tds=td===0?'EVEN':td>0?'+'+td:''+td;
+  document.getElementById('scv').textContent='TOTAL: '+ts+' ('+tds+')';
+  var msgs=['SUCH SKILL. VERY GOLF. WOW.','MUCH WOW. GOOD ROUND.','VERY TRY. SUCH EFFORT.','SO MANY STROKE. WOW.'];
+  document.getElementById('scm').textContent=td<=-5?msgs[0]:td<=0?msgs[1]:td<=8?msgs[2]:msgs[3];
+  document.getElementById('ov-score').style.display='flex';
 }
 
 // ============================================================
 // UI HELPERS
 // ============================================================
-function updateHUD() {
-  var d = HOLES_DEF[STATE.hole];
-  document.getElementById('hud-hole').textContent    = 'HOLE '+(STATE.hole+1)+' / 9';
-  document.getElementById('hud-par').textContent     = 'PAR '+d.par;
-  document.getElementById('hud-strokes').textContent = STATE.strokes+' STROKE'+(STATE.strokes!==1?'S':'');
-  var td = STATE.totalStrokes - STATE.totalPar;
-  document.getElementById('hud-total').textContent   = 'TOTAL: '+(td===0?'E':td>0?'+'+td:''+td);
+function updateHUD(){
+  var m=META[G.holeIdx];
+  document.getElementById('hh').textContent='HOLE '+(G.holeIdx+1)+' / 9';
+  document.getElementById('hp').textContent='PAR '+m.par;
+  document.getElementById('hs').textContent=G.strokes+' STROKE'+(G.strokes!==1?'S':'');
+  var td=G.totStrokes-G.totPar;
+  document.getElementById('ht').textContent='TOT: '+(td===0?'E':td>0?'+'+td:''+td);
 }
-
-function setHint(msg) { document.getElementById('hud-hint').textContent = msg; }
-
-var speechTimer = null;
-function showSpeech(msg) {
-  var el = document.getElementById('speech');
-  el.textContent = msg;
-  el.classList.add('show');
-  if (speechTimer) clearTimeout(speechTimer);
-  speechTimer = setTimeout(function(){ el.classList.remove('show'); }, 2200);
+function setHint(m){document.getElementById('hint').textContent=m;}
+var _st=null;
+function showSpeech(m){
+  var el=document.getElementById('speech');
+  el.textContent=m; el.classList.add('show');
+  if(_st)clearTimeout(_st);
+  _st=setTimeout(function(){el.classList.remove('show');},2500);
 }
-
-function togglePause() {
-  STATE.paused = !STATE.paused;
-  document.getElementById('ov-pause').style.display = STATE.paused ? 'flex' : 'none';
-  if (!STATE.paused && HOLE) draw();
+function togglePause(){
+  G.paused=!G.paused;
+  document.getElementById('ov-pause').style.display=G.paused?'flex':'none';
+  if(!G.paused&&HOLE)draw();
 }
-
-function restartHole() {
+function restartHole(){
   document.getElementById('ov-pause').style.display='none';
-  STATE.paused = false;
-  loadHole(STATE.hole);
+  G.paused=false; loadHole(G.holeIdx);
 }
-
-function startGame() {
+function startGame(){
   document.getElementById('ov-title').style.display='none';
-  STATE.gameActive   = true;
-  STATE.scores       = [];
-  STATE.totalPar     = 0;
-  STATE.totalStrokes = 0;
-  loadHole(0);
+  G.active=true; G.scores=[]; G.totPar=0; G.totStrokes=0; loadHole(0);
+}
+function restartGame(){
+  ['ov-score','ov-pause','ov-hole'].forEach(function(id){
+    document.getElementById(id).style.display='none';
+  });
+  G.paused=false; startGame();
 }
 
-function restartGame() {
-  document.getElementById('ov-scorecard').style.display='none';
-  document.getElementById('ov-pause').style.display='none';
-  document.getElementById('ov-hole').style.display='none';
-  STATE.paused = false;
-  startGame();
+// ============================================================
+// COLOUR HELPERS
+// ============================================================
+function shadeDark(hex,amt){
+  var r=Math.max(0,parseInt(hex.slice(1,3),16)-amt);
+  var g=Math.max(0,parseInt(hex.slice(3,5),16)-amt);
+  var b=Math.max(0,parseInt(hex.slice(5,7),16)-amt);
+  return '#'+[r,g,b].map(function(v){return('0'+v.toString(16)).slice(-2);}).join('');
 }
+function shadeBright(hex,amt){
+  var r=Math.min(255,parseInt(hex.slice(1,3),16)+amt);
+  var g=Math.min(255,parseInt(hex.slice(3,5),16)+amt);
+  var b=Math.min(255,parseInt(hex.slice(5,7),16)+amt);
+  return '#'+[r,g,b].map(function(v){return('0'+v.toString(16)).slice(-2);}).join('');
+}
+
+// ============================================================
+// ROTATION SYSTEM
+// 4 iso projection angles. Physics unchanged.
+// READS: ROT_ANGLE, wx, wy
+// WRITES: screen coords only
+// ============================================================
+var ROT_ANGLE = 0; // 0,1,2,3 = NW,NE,SE,SW viewpoint
+
+function w2s(wx, wy) {
+  // Route through rotation matrix
+  var rx = wx, ry = wy;
+  switch(ROT_ANGLE) {
+    case 1: rx= wy; ry=-wx+(HOLE?HOLE.grid[0].length:12); break; // 90° CW
+    case 2: rx=-wx+(HOLE?HOLE.grid[0].length:12); ry=-wy+(HOLE?HOLE.grid.length:9); break; // 180°
+    case 3: rx=-wy+(HOLE?HOLE.grid.length:9); ry= wx; break; // 270° CW
+  }
+  return {
+    x: ISO_OX + (rx - ry) * TW/2,
+    y: ISO_OY + (rx + ry) * TH/2
+  };
+}
+
+function s2w(sx, sy) {
+  var tx=sx-ISO_OX, ty=sy-ISO_OY;
+  var rx=(tx/TW + ty/TH);
+  var ry=(ty/TH - tx/TW);
+  // Inverse rotation
+  var wx=rx, wy=ry;
+  var GW=HOLE?HOLE.grid[0].length:12, GH=HOLE?HOLE.grid.length:9;
+  switch(ROT_ANGLE) {
+    case 1: wx=-ry+GW; wy=rx; break;
+    case 2: wx=-rx+GW; wy=-ry+GH; break;
+    case 3: wx=ry; wy=-rx+GH; break;
+  }
+  return {x:wx, y:wy};
+}
+
+function rotateView() {
+  ROT_ANGLE=(ROT_ANGLE+1)%4;
+  if(HOLE){setIsoOrigin(HOLE); if(!G.active||G.paused)draw();}
+  var labels=['NW VIEW','NE VIEW','SE VIEW','SW VIEW'];
+  showSpeech(labels[ROT_ANGLE]);
+}
+
+// ============================================================
+// LEVEL EDITOR
+// ============================================================
+var EDITOR = {
+  active:    false,
+  tool:      'tile',
+  tileType:  'fair',
+  obsType:   '',
+  painting:  false,
+  // Working copy of hole grid
+  grid:      null,
+  obstacles: [],
+  tee:       {wx:1.5,wy:1.5},
+  cup:       {wx:10.5,wy:7.5},
+  pipeIn:    null,
+  pipeOut:   null,
+  GW:        12,
+  GH:        9
+};
+
+function toggleEditor() {
+  EDITOR.active=!EDITOR.active;
+  var ui=document.getElementById('editor-ui');
+  var ebtn=document.getElementById('ebtn');
+  if(EDITOR.active){
+    ui.classList.add('active');
+    ebtn.style.borderColor='#f0c060';
+    ebtn.style.color='#f0c060';
+    // Clone current hole grid or make fresh
+    if(HOLE&&HOLE.grid){
+      EDITOR.grid=HOLE.grid.map(function(r){return r.map(function(c){return{t:c.t};});});
+      EDITOR.GW=HOLE.grid[0].length; EDITOR.GH=HOLE.grid.length;
+      EDITOR.obstacles=HOLE.obstacles.map(function(o){return JSON.parse(JSON.stringify(o));});
+      EDITOR.tee={wx:HOLE.tee.wx,wy:HOLE.tee.wy};
+      EDITOR.cup={wx:HOLE.cup.wx,wy:HOLE.cup.wy};
+      EDITOR.pipeIn=HOLE.pipeIn?{wx:HOLE.pipeIn.wx,wy:HOLE.pipeIn.wy}:null;
+      EDITOR.pipeOut=HOLE.pipeOut?{wx:HOLE.pipeOut.wx,wy:HOLE.pipeOut.wy}:null;
+    } else {
+      editorMakeBlankGrid();
+    }
+    setHint('CLICK TILES TO PAINT · E=EXIT EDITOR');
+    G.paused=true;
+    applyEditorToHole();
+  } else {
+    ui.classList.remove('active');
+    ebtn.style.borderColor='#9a6a2a';
+    ebtn.style.color='#c8f0c8';
+    G.paused=false;
+    setHint('DRAG ANYWHERE · RELEASE TO SHOOT');
+  }
+}
+
+function editorMakeBlankGrid() {
+  EDITOR.grid=[];
+  for(var gy=0;gy<EDITOR.GH;gy++){
+    var row=[];
+    for(var gx=0;gx<EDITOR.GW;gx++){
+      var isEdge=(gx===0||gy===0||gx===EDITOR.GW-1||gy===EDITOR.GH-1);
+      row.push({t:isEdge?T.VOID:T.FAIR});
+    }
+    EDITOR.grid.push(row);
+  }
+  EDITOR.obstacles=[];
+  EDITOR.tee={wx:1.5,wy:Math.floor(EDITOR.GH/2)+0.5};
+  EDITOR.cup={wx:EDITOR.GW-1.5,wy:Math.floor(EDITOR.GH/2)+0.5};
+  EDITOR.pipeIn=null; EDITOR.pipeOut=null;
+}
+
+function applyEditorToHole() {
+  // READS: EDITOR state
+  // WRITES: HOLE — makes editor grid the live hole
+  var edHole={
+    grid:EDITOR.grid,
+    tee:{wx:EDITOR.tee.wx,wy:EDITOR.tee.wy},
+    cup:{wx:EDITOR.cup.wx,wy:EDITOR.cup.wy},
+    obstacles:EDITOR.obstacles.map(function(o){var c=JSON.parse(JSON.stringify(o));c._wx=c.wx;c._wy=c.wy;c._angle=0;return c;}),
+    pipeIn:EDITOR.pipeIn,
+    pipeOut:EDITOR.pipeOut
+  };
+  calibrateTile(edHole);
+  setIsoOrigin(edHole);
+  HOLE=edHole;
+  draw();
+}
+
+function setEditorTool(type, subtype) {
+  EDITOR.tool=type;
+  EDITOR.tileType=subtype;
+  EDITOR.obsType=subtype;
+  // Update active state on toolbar
+  document.querySelectorAll('.etool').forEach(function(el){el.classList.remove('active-tool');});
+  var id='et-'+(type==='tile'?subtype:type==='obs'?subtype:
+    type==='settee'?'settee':type==='setcup'?'setcup':'delobs');
+  var el=document.getElementById(id);
+  if(el)el.classList.add('active-tool');
+}
+
+function editorGetTileFromScreen(sx,sy) {
+  // READS: screen coords
+  // RETURNS: {gx,gy} grid cell or null
+  var w=s2w(sx,sy);
+  var gx=Math.floor(w.x), gy=Math.floor(w.y);
+  if(gy<0||gy>=EDITOR.GH||gx<0||gx>=EDITOR.GW)return null;
+  return{gx:gx,gy:gy,wx:w.x,wy:w.y};
+}
+
+function editorHandleClick(sx,sy) {
+  var hit=editorGetTileFromScreen(sx,sy);
+  if(!hit)return;
+  if(EDITOR.tool==='tile'){
+    EDITOR.grid[hit.gy][hit.gx].t=EDITOR.tileType;
+    applyEditorToHole();
+  } else if(EDITOR.tool==='settee'){
+    EDITOR.tee={wx:hit.wx,wy:hit.wy};
+    applyEditorToHole();
+    showSpeech('TEE SET!');
+  } else if(EDITOR.tool==='setcup'){
+    EDITOR.cup={wx:hit.wx,wy:hit.wy};
+    applyEditorToHole();
+    showSpeech('CUP SET!');
+  } else if(EDITOR.tool==='obs'){
+    var obsT=EDITOR.obsType;
+    var cx=hit.wx, cy=hit.wy;
+    if(obsT==='pipeIn'){
+      EDITOR.pipeIn={wx:cx,wy:cy};
+    } else if(obsT==='pipeOut'){
+      EDITOR.pipeOut={wx:cx,wy:cy};
+    } else {
+      var newObs={type:obsT,wx:cx,wy:cy};
+      if(obsT==='windmill'){newObs.speed=0.022;newObs.bladeR=0.9;}
+      if(obsT==='shibe'){newObs.vx=0;newObs.vy=0.04;newObs.minY=cy-1.5;newObs.maxY=cy+1.5;}
+      EDITOR.obstacles.push(newObs);
+    }
+    applyEditorToHole();
+    showSpeech(obsT.toUpperCase()+' PLACED!');
+  } else if(EDITOR.tool==='delobs'){
+    // Remove closest obstacle to click
+    var best=-1, bestD=0.8;
+    EDITOR.obstacles.forEach(function(o,i){
+      var dx=o.wx-hit.wx, dy=o.wy-hit.wy;
+      var d=Math.sqrt(dx*dx+dy*dy);
+      if(d<bestD){bestD=d;best=i;}
+    });
+    if(best>=0){EDITOR.obstacles.splice(best,1);applyEditorToHole();showSpeech('DELETED!');}
+    if(EDITOR.pipeIn){var dx=EDITOR.pipeIn.wx-hit.wx,dy=EDITOR.pipeIn.wy-hit.wy;if(Math.sqrt(dx*dx+dy*dy)<0.8){EDITOR.pipeIn=null;applyEditorToHole();}}
+    if(EDITOR.pipeOut){var dx2=EDITOR.pipeOut.wx-hit.wx,dy2=EDITOR.pipeOut.wy-hit.wy;if(Math.sqrt(dx2*dx2+dy2*dy2)<0.8){EDITOR.pipeOut=null;applyEditorToHole();}}
+  }
+}
+
+function editorClear() {
+  editorMakeBlankGrid();
+  applyEditorToHole();
+  showSpeech('GRID CLEARED!');
+}
+
+function editorResize() {
+  var wStr=window.prompt('Grid width (4-20):', String(EDITOR.GW));
+  var hStr=window.prompt('Grid height (4-16):', String(EDITOR.GH));
+  var w=parseInt(wStr)||EDITOR.GW, h=parseInt(hStr)||EDITOR.GH;
+  w=Math.max(4,Math.min(20,w)); h=Math.max(4,Math.min(16,h));
+  EDITOR.GW=w; EDITOR.GH=h;
+  editorMakeBlankGrid();
+  applyEditorToHole();
+}
+
+function playEditorHole() {
+  if(!EDITOR.grid)return;
+  applyEditorToHole();
+  G.active=true; G.strokes=0; G.holeDone=false;
+  G.scores=[]; G.totPar=0; G.totStrokes=0;
+  respawnBall();
+  EDITOR.active=false;
+  document.getElementById('editor-ui').classList.remove('active');
+  document.getElementById('ebtn').style.borderColor='#9a6a2a';
+  document.getElementById('ebtn').style.color='#c8f0c8';
+  G.paused=false;
+  updateHUD();
+  setHint('DRAG ANYWHERE · RELEASE TO SHOOT');
+  showSpeech('PLAYING YOUR HOLE!');
+}
+
+// ============================================================
+// HOLE SHARE — base64 encode/decode
+// ============================================================
+function holeToCode(edState) {
+  // READS: EDITOR state
+  // RETURNS: base64 string
+  var tileMap={'void':'_','tee':'T','fair':'F','rough':'R','sand':'S','water':'W','green':'G','bridge':'B','path':'P'};
+  var rows=edState.grid.map(function(row){
+    return row.map(function(c){return tileMap[c.t]||'F';}).join('');
+  });
+  var gridStr=rows.join('|');
+  var obj={
+    g:gridStr,
+    t:[Math.round(edState.tee.wx*10)/10, Math.round(edState.tee.wy*10)/10],
+    c:[Math.round(edState.cup.wx*10)/10, Math.round(edState.cup.wy*10)/10],
+    o:edState.obstacles.map(function(o){
+      var e={tp:o.type,x:Math.round(o.wx*10)/10,y:Math.round(o.wy*10)/10};
+      if(o.speed)e.sp=o.speed; if(o.bladeR)e.bl=o.bladeR;
+      if(o.vx!==undefined)e.vx=o.vx; if(o.vy!==undefined)e.vy=o.vy;
+      return e;
+    }),
+    pi:edState.pipeIn?[edState.pipeIn.wx,edState.pipeIn.wy]:null,
+    po:edState.pipeOut?[edState.pipeOut.wx,edState.pipeOut.wy]:null
+  };
+  return btoa(JSON.stringify(obj));
+}
+
+function codeToHole(code) {
+  // READS: base64 code string
+  // RETURNS: EDITOR state object or null
+  try {
+    var obj=JSON.parse(atob(code.trim()));
+    var tileMap={'_':'void','T':'tee','F':'fair','R':'rough','S':'sand','W':'water','G':'green','B':'bridge','P':'path'};
+    var rows=obj.g.split('|');
+    var grid=rows.map(function(row){
+      return row.split('').map(function(ch){return{t:tileMap[ch]||'fair'};});
+    });
+    var obs=(obj.o||[]).map(function(e){
+      var o={type:e.tp,wx:e.x,wy:e.y};
+      if(e.sp!==undefined)o.speed=e.sp; if(e.bl!==undefined)o.bladeR=e.bl;
+      if(e.vx!==undefined)o.vx=e.vx; if(e.vy!==undefined)o.vy=e.vy;
+      if(o.type==='shibe'&&o.vy!==undefined){o.minY=o.wy-1.5;o.maxY=o.wy+1.5;}
+      return o;
+    });
+    return {
+      grid:grid, GW:grid[0].length, GH:grid.length,
+      tee:{wx:obj.t[0],wy:obj.t[1]},
+      cup:{wx:obj.c[0],wy:obj.c[1]},
+      obstacles:obs,
+      pipeIn:obj.pi?{wx:obj.pi[0],wy:obj.pi[1]}:null,
+      pipeOut:obj.po?{wx:obj.po[0],wy:obj.po[1]}:null
+    };
+  } catch(e) {
+    return null;
+  }
+}
+
+function shareHole() {
+  var code=holeToCode(EDITOR);
+  document.getElementById('share-code').value=code;
+  document.getElementById('share-modal').classList.add('open');
+}
+
+function copyHoleCode() {
+  var ta=document.getElementById('share-code');
+  ta.select();
+  try{
+    navigator.clipboard.writeText(ta.value).then(function(){showSpeech('CODE COPIED!');}).catch(function(){document.execCommand('copy');showSpeech('CODE COPIED!');});
+  } catch(e){document.execCommand('copy');showSpeech('CODE COPIED!');}
+}
+
+function closeShareModal() {
+  document.getElementById('share-modal').classList.remove('open');
+}
+
+function loadFromCode() {
+  var code=window.prompt('Paste hole code:','');
+  if(!code)return;
+  var state=codeToHole(code);
+  if(!state){showSpeech('INVALID CODE!');return;}
+  EDITOR.grid=state.grid; EDITOR.GW=state.GW; EDITOR.GH=state.GH;
+  EDITOR.tee=state.tee; EDITOR.cup=state.cup;
+  EDITOR.obstacles=state.obstacles;
+  EDITOR.pipeIn=state.pipeIn; EDITOR.pipeOut=state.pipeOut;
+  applyEditorToHole();
+  showSpeech('HOLE LOADED!');
+}
+
+// ============================================================
+// KEYBOARD SHORTCUTS
+// ============================================================
+document.addEventListener('keydown',function(e){
+  if(e.key==='r'||e.key==='R') rotateView();
+  if(e.key==='e'||e.key==='E') toggleEditor();
+  if(e.key==='Escape'){
+    closeShareModal();
+    if(EDITOR.active)toggleEditor();
+  }
+});
+
+// Wire editor mouse events into canvas
+// DECISION: editor intercepts pointer events only when active
+canvas.addEventListener('pointerdown',function(e){
+  if(!EDITOR.active)return;
+  e.preventDefault(); e.stopPropagation();
+  EDITOR.painting=true;
+  var p=evPos(e);
+  editorHandleClick(p.x,p.y);
+},{capture:true});
+
+canvas.addEventListener('pointermove',function(e){
+  if(!EDITOR.active||!EDITOR.painting)return;
+  e.preventDefault(); e.stopPropagation();
+  if(EDITOR.tool==='tile'){
+    var p=evPos(e);
+    editorHandleClick(p.x,p.y);
+  }
+},{capture:true});
+
+canvas.addEventListener('pointerup',function(e){
+  if(!EDITOR.active)return;
+  EDITOR.painting=false;
+},{capture:true});
 
 // ============================================================
 // BOOT
 // ============================================================
-document.addEventListener('DOMContentLoaded', function() {
-  resizeCanvas();
-  window.addEventListener('resize', function(){ resizeCanvas(); if(HOLE) loadHole(STATE.hole); });
+document.addEventListener('DOMContentLoaded',function(){
+  resize();
+  window.addEventListener('resize',resize);
   gameLoop();
 });
 </script>
