@@ -1258,7 +1258,7 @@ canvas.addEventListener('pointerdown',function(e){
   var ovs=['ov-title','ov-pause','ov-hole','ov-score'];
   for(var i=0;i<ovs.length;i++){
     var el=document.getElementById(ovs[i]);
-    if(el&&el.style.display!=='none')return;
+    if(el&&getComputedStyle(el).display!=='none')return;
   }
   if(!G.active||G.ball.moving||G.holeDone||G.paused)return;
   var p=evPos(e);
