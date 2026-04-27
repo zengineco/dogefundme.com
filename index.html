@@ -789,7 +789,65 @@ footer {
     </div>
 
   </div>
+<!-- VISITOR COUNTER -->
+<div style="margin:64px 0;display:flex;justify-content:center;">
+  <div style="background:var(--glass-bg);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);border:1px solid var(--glass-border);border-radius:var(--r-xl);padding:40px 56px;text-align:center;position:relative;overflow:hidden;min-width:320px;">
+    <!-- radial glow -->
+    <div style="position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(57,255,20,0.06) 0%,transparent 70%);pointer-events:none;"></div>
+    <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--pixel-green);margin-bottom:14px;font-family:var(--font-pixel);position:relative;">// souls who found this place</div>
+    <div id="counter-num" style="font-family:var(--font-head);font-weight:800;font-size:64px;color:var(--gold-bright);letter-spacing:-3px;line-height:1;margin-bottom:8px;position:relative;transition:opacity .3s;">420</div>
+    <div style="font-size:11px;color:var(--blue-mute);letter-spacing:2px;text-transform:uppercase;position:relative;">visitors and counting</div>
+    <div style="margin-top:20px;height:3px;background:var(--glass-border);border-radius:2px;overflow:hidden;">
+      <div id="counter-bar" style="height:100%;background:linear-gradient(90deg,var(--pixel-green),var(--gold-bright));border-radius:2px;width:0%;transition:width 1s cubic-bezier(.34,1.56,.64,1);"></div>
+    </div>
+    <div style="margin-top:8px;font-size:10px;color:var(--blue-hint);letter-spacing:1px;display:flex;justify-content:space-between;">
+      <span>0</span><span id="counter-goal">goal: 10,000</span><span>10,000</span>
+    </div>
+  </div>
+</div>
 
+<script>
+(function(){
+  var FLOOR=420, GOAL=10000, MAX_RETRY=4, DELAY=1000;
+
+  function animate(target){
+    var el=document.getElementById('counter-num');
+    var bar=document.getElementById('counter-bar');
+    var duration=1400, start=null;
+    document.getElementById('counter-goal').textContent='goal: '+GOAL.toLocaleString();
+    requestAnimationFrame(function step(ts){
+      if(!start)start=ts;
+      var p=Math.min((ts-start)/duration,1);
+      var e=1-Math.pow(1-p,3);
+      el.textContent=Math.round(e*target).toLocaleString();
+      bar.style.width=(e*Math.min(target/GOAL*100,100))+'%';
+      if(p<1)requestAnimationFrame(step);
+      else{el.textContent=target.toLocaleString();bar.style.width=Math.min(target/GOAL*100,100)+'%';}
+    });
+  }
+
+  function fetchCounter(attempt){
+    fetch('https://api.countapi.xyz/hit/dogefundme.com/visitors')
+      .then(function(r){if(!r.ok)throw new Error(r.status);return r.json();})
+      .then(function(d){
+        var n=Math.max(d.value||0,FLOOR);
+        try{localStorage.setItem('dfm_count',n);}catch(e){}
+        animate(n);
+      })
+      .catch(function(){
+        if(attempt<MAX_RETRY){
+          setTimeout(function(){fetchCounter(attempt+1);},DELAY*Math.pow(2,attempt));
+        } else {
+          var stored=0;
+          try{stored=parseInt(localStorage.getItem('dfm_count')||'0',10);}catch(e){}
+          animate(Math.max(stored,FLOOR));
+        }
+      });
+  }
+
+  fetchCounter(0);
+})();
+</script>
   <!-- BOTTOM AD UNIT -->
   <div class="ad-unit ad-unit-tall">
     <ins class="adsbygoogle"
