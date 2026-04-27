@@ -161,11 +161,51 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a1a08;font-family:
 <div id="banner"><div class="bn" id="bn">HOLE 1 OF 9</div><div class="bname" id="bname">SUCH START</div><div class="bpar" id="bpar">PAR 3</div></div>
 
 <div class="ov" id="ov-title">
-  <div class="ob">
-    <div class="oh">FunDoge!</div>
-    <div class="os">SUCH ISO · VERY GOLF · WOW<br><br>9 HOLES · AIR HOCKEY PHYSICS<br>DRAG ANYWHERE TO AIM<br>RELEASE TO SHOOT<br><br>WATCH FOR WATER · SAND BITES<br>TREES BLOCK · PIPES TELEPORT</div>
-    <button class="btn bp" onclick="startGame()">▶ PLAY NOW</button><br>
-    <a href="https://dogefundme.com" style="text-decoration:none"><button class="btn bs" style="margin-top:8px;font-size:6px">DOGEFUNDME.COM</button></a>
+  <div class="ob" style="max-width:460px">
+    <!-- Title -->
+    <div style="font-size:22px;color:#f0c060;text-shadow:3px 3px 0 #8a4a00,6px 6px 0 rgba(0,0,0,0.4);margin-bottom:4px;letter-spacing:2px;">FunDoge!</div>
+    <div style="font-size:7px;color:#39ff14;text-shadow:0 0 10px rgba(57,255,20,0.5);letter-spacing:3px;margin-bottom:20px;">SUCH GOLF · VERY ISO · WOW</div>
+    <!-- Menu options -->
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+      <button class="btn bp" onclick="startGame()" style="font-size:10px;padding:14px;letter-spacing:2px;">▶  PLAY  9  HOLES</button>
+      <button class="btn bs" onclick="startFromHole()" style="font-size:8px;">🏌️ SELECT HOLE</button>
+      <button class="btn bs" onclick="openBuildMode()" style="font-size:8px;">✏️ BUILD YOUR OWN HOLE</button>
+      <button class="btn bs" onclick="openLoadCode()" style="font-size:8px;">📋 LOAD HOLE CODE</button>
+      <button class="btn bs" onclick="showHowToPlay()" style="font-size:8px;">❓ HOW TO PLAY</button>
+    </div>
+    <div style="font-size:6px;color:#3a6a38;letter-spacing:1px;">R = ROTATE VIEW · E = EDITOR</div>
+    <div style="font-size:5px;color:#2a4a28;margin-top:6px;">© 2026 ZENGINE™ · DOGEFUNDME.COM</div>
+  </div>
+</div>
+
+<!-- HOW TO PLAY -->
+<div class="ov" id="ov-howto" style="display:none">
+  <div class="ob" style="max-width:440px">
+    <div class="oh">HOW TO PLAY</div>
+    <div style="font-size:6px;color:#c8f0c8;line-height:2.4;text-align:left;margin-bottom:16px;">
+      DRAG ANYWHERE ON SCREEN<br>
+      RELEASE TO SHOOT THE BALL<br><br>
+      <span style="color:#4ab840">■</span> FAIRWAY — slides fast<br>
+      <span style="color:#2a7020">■</span> ROUGH — slows you down<br>
+      <span style="color:#e8d890;text-shadow:none">■</span> SAND — nearly stops you<br>
+      <span style="color:#2060c0">■</span> WATER — ball resets (+1 stroke)<br>
+      <span style="color:#8ae870">■</span> GREEN — slow and precise<br>
+      <span style="color:#c8a870">■</span> BRIDGE — cross over water<br><br>
+      R KEY — ROTATE VIEW (4 ANGLES)<br>
+      E KEY — OPEN LEVEL EDITOR<br><br>
+      GET THE BALL IN THE CUP (FLAG)<br>
+      FEWEST STROKES WINS
+    </div>
+    <button class="btn bp" onclick="document.getElementById('ov-howto').style.display='none';document.getElementById('ov-title').style.display='flex'">← BACK</button>
+  </div>
+</div>
+
+<!-- HOLE SELECT -->
+<div class="ov" id="ov-holeselect" style="display:none">
+  <div class="ob" style="max-width:420px">
+    <div class="oh" style="font-size:12px;margin-bottom:14px">SELECT HOLE</div>
+    <div id="holeselect-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px;"></div>
+    <button class="btn bs" onclick="document.getElementById('ov-holeselect').style.display='none';document.getElementById('ov-title').style.display='flex'">← BACK</button>
   </div>
 </div>
 <div class="ov" id="ov-pause" style="display:none">
@@ -225,26 +265,7 @@ var TILE_DEPTH = 18;  // wall height px
 var ISO_OX = 0;
 var ISO_OY = 0;
 
-// w2s and s2w defined in ROTATION SYSTEM below
-function w2tmp(wx,wy){return{x:(wx-wy)*TW/2,y:(wx+wy)*TH/2};}
-
-function setIsoOrigin(hole) {
-  // Center the hole grid on screen
-  // Find bounding box of all tiles
-  var minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
-  hole.grid.forEach(function(row,gy){ row.forEach(function(cell,gx){
-    if(cell.t!=='void'){
-      minX=Math.min(minX,gx); maxX=Math.max(maxX,gx+1);
-      minY=Math.min(minY,gy); maxY=Math.max(maxY,gy+1);
-    }
-  });});
-  var s0=w2tmp(minX,minY), s1=w2tmp(maxX,minY), s2=w2tmp(minX,maxY), s3=w2tmp(maxX,maxY);
-  var sxArr=[s0.x,s1.x,s2.x,s3.x], syArr=[s0.y,s1.y,s2.y,s3.y];
-  var sW = Math.max.apply(null,sxArr)-Math.min.apply(null,sxArr);
-  var sH = Math.max.apply(null,syArr)-Math.min.apply(null,syArr);
-  ISO_OX = VW/2 - (w2tmp(minX,minY).x + sW/2);
-  ISO_OY = (HUD + VH)/2 - (w2tmp(minX,minY).y + sH/2) - TILE_DEPTH;
-}
+// setIsoOrigin and w2s/s2w defined in ROTATION SYSTEM section
 
 // ============================================================
 // TILE SIZE CALIBRATION — scales TW/TH so hole fits screen
@@ -1153,6 +1174,64 @@ function drawAimLine() {
   ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1; ctx.strokeRect(bx,by,bW,bH);
 }
 
+function drawEditorCursor() {
+  // READS: G.mouse, EDITOR.tool, EDITOR.tileType
+  // Highlights the tile cell under the mouse in editor mode
+  var w = s2w(G.mouse.x, G.mouse.y);
+  var gx = Math.floor(w.x), gy = Math.floor(w.y);
+  if (!EDITOR.grid||gy<0||gy>=EDITOR.GH||gx<0||gx>=EDITOR.GW) return;
+
+  // Draw highlight diamond on top face of hovered tile
+  var tl=w2s(gx,   gy  );
+  var tr=w2s(gx+1, gy  );
+  var br=w2s(gx+1, gy+1);
+  var bl=w2s(gx,   gy+1);
+
+  // Tool-colored outline
+  var toolColors = {
+    fair:'#4ab840', rough:'#2a7020', sand:'#e8d890',
+    water:'#2060c0', green:'#8ae870', bridge:'#c8a870',
+    tee:'#6ad060', void:'#ff4040'
+  };
+  var outlineColor = '#f0c060'; // default gold
+  if (EDITOR.tool==='tile') outlineColor = toolColors[EDITOR.tileType]||'#f0c060';
+  else if (EDITOR.tool==='settee') outlineColor = '#39ff14';
+  else if (EDITOR.tool==='setcup') outlineColor = '#6060ff';
+  else if (EDITOR.tool==='obs')    outlineColor = '#ff8040';
+  else if (EDITOR.tool==='delobs') outlineColor = '#ff4040';
+
+  // Pulsing outline
+  var pulse = 0.5 + 0.5*Math.sin(FRAME*0.12);
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(tl.x,tl.y); ctx.lineTo(tr.x,tr.y);
+  ctx.lineTo(br.x,br.y); ctx.lineTo(bl.x,bl.y);
+  ctx.closePath();
+  ctx.strokeStyle = outlineColor;
+  ctx.lineWidth = 2.5;
+  ctx.globalAlpha = 0.6 + pulse*0.4;
+  ctx.stroke();
+  // Fill tint
+  ctx.fillStyle = outlineColor;
+  ctx.globalAlpha = 0.12 + pulse*0.08;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  // Coords label
+  ctx.save();
+  ctx.font = '9px "Press Start 2P"';
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  var mid = {
+    x:(tl.x+tr.x+br.x+bl.x)/4,
+    y:(tl.y+tr.y+br.y+bl.y)/4
+  };
+  ctx.fillText(gx+','+gy, mid.x, mid.y-2);
+  ctx.restore();
+}
+
 function drawMallet() {
   if (!G.active||G.paused) return;
   var x=G.mouse.x, y=G.mouse.y;
@@ -1238,6 +1317,9 @@ function draw() {
   // Ball (always on top)
   drawBallSprite();
 
+  // Editor cursor overlay
+  if (EDITOR.active) drawEditorCursor();
+
   // Mallet cursor
   drawMallet();
 }
@@ -1253,6 +1335,7 @@ function evPos(e){
 canvas.addEventListener('mousemove',function(e){
   var p=evPos(e); G.mouse.x=p.x; G.mouse.y=p.y;
   if(G.drag.on){G.drag.cx=p.x;G.drag.cy=p.y;}
+  if(EDITOR.active&&HOLE)draw();
 });
 canvas.addEventListener('pointerdown',function(e){
   if(!G.active||G.ball.moving||G.holeDone||G.paused)return;
@@ -1433,42 +1516,83 @@ function shadeBright(hex,amt){
 // READS: ROT_ANGLE, wx, wy
 // WRITES: screen coords only
 // ============================================================
-var ROT_ANGLE = 0; // 0,1,2,3 = NW,NE,SE,SW viewpoint
+// ============================================================
+// ROTATION SYSTEM — fixed 2:1 iso, 4 angles
+// DECISION: rotation transforms world coords before iso project.
+// All 4 cases rotate around center of grid so origin stays put.
+// w2tmp always uses angle=0 for setIsoOrigin bounding box calc.
+// ============================================================
+var ROT_ANGLE = 0; // 0=NW 1=NE 2=SE 3=SW
+
+function rotWorld(wx, wy) {
+  // READS: wx,wy world coords, ROT_ANGLE, HOLE dims
+  // RETURNS: rotated world coords for projection
+  if (!HOLE) return {x:wx, y:wy};
+  var GW=HOLE.grid[0].length, GH=HOLE.grid.length;
+  switch(ROT_ANGLE) {
+    case 0: return {x:wx,         y:wy};
+    case 1: return {x:GH-1-wy,    y:wx};
+    case 2: return {x:GW-1-wx,    y:GH-1-wy};
+    case 3: return {x:wy,         y:GW-1-wx};
+  }
+  return {x:wx, y:wy};
+}
+
+function unrotWorld(rx, ry) {
+  // READS: rotated world coords
+  // RETURNS: original world coords (inverse of rotWorld)
+  if (!HOLE) return {x:rx, y:ry};
+  var GW=HOLE.grid[0].length, GH=HOLE.grid.length;
+  switch(ROT_ANGLE) {
+    case 0: return {x:rx,         y:ry};
+    case 1: return {x:ry,         y:GH-1-rx};
+    case 2: return {x:GW-1-rx,    y:GH-1-ry};
+    case 3: return {x:GW-1-ry,    y:rx};
+  }
+  return {x:rx, y:ry};
+}
 
 function w2s(wx, wy) {
-  // Route through rotation matrix
-  var rx = wx, ry = wy;
-  switch(ROT_ANGLE) {
-    case 1: rx= wy; ry=-wx+(HOLE?HOLE.grid[0].length:12); break; // 90° CW
-    case 2: rx=-wx+(HOLE?HOLE.grid[0].length:12); ry=-wy+(HOLE?HOLE.grid.length:9); break; // 180°
-    case 3: rx=-wy+(HOLE?HOLE.grid.length:9); ry= wx; break; // 270° CW
-  }
+  var r = rotWorld(wx, wy);
   return {
-    x: ISO_OX + (rx - ry) * TW/2,
-    y: ISO_OY + (rx + ry) * TH/2
+    x: ISO_OX + (r.x - r.y) * TW/2,
+    y: ISO_OY + (r.x + r.y) * TH/2
   };
 }
 
 function s2w(sx, sy) {
   var tx=sx-ISO_OX, ty=sy-ISO_OY;
-  var rx=(tx/TW + ty/TH);
-  var ry=(ty/TH - tx/TW);
-  // Inverse rotation
-  var wx=rx, wy=ry;
-  var GW=HOLE?HOLE.grid[0].length:12, GH=HOLE?HOLE.grid.length:9;
-  switch(ROT_ANGLE) {
-    case 1: wx=-ry+GW; wy=rx; break;
-    case 2: wx=-rx+GW; wy=-ry+GH; break;
-    case 3: wx=ry; wy=-rx+GH; break;
-  }
-  return {x:wx, y:wy};
+  var rx=(tx/(TW/2) + ty/(TH/2)) / 2;
+  var ry=(ty/(TH/2) - tx/(TW/2)) / 2;
+  return unrotWorld(rx, ry);
 }
 
 function rotateView() {
   ROT_ANGLE=(ROT_ANGLE+1)%4;
-  if(HOLE){setIsoOrigin(HOLE); if(!G.active||G.paused)draw();}
-  var labels=['NW VIEW','NE VIEW','SE VIEW','SW VIEW'];
+  if(HOLE){ setIsoOrigin(HOLE); draw(); }
+  var labels=['◤ NW','◥ NE','◢ SE','◣ SW'];
   showSpeech(labels[ROT_ANGLE]);
+}
+
+// Override setIsoOrigin to account for rotation bounding box
+function setIsoOrigin(hole) {
+  var GW=hole.grid[0].length, GH=hole.grid.length;
+  // After rotation, effective dims swap for odd angles
+  var effW = (ROT_ANGLE%2===0) ? GW : GH;
+  var effH = (ROT_ANGLE%2===0) ? GH : GW;
+  // Bounding box in screen space at current rotation
+  // Four corners of rotated grid
+  var corners=[];
+  [[0,0],[effW,0],[0,effH],[effW,effH]].forEach(function(c){
+    corners.push({x:(c[0]-c[1])*TW/2, y:(c[0]+c[1])*TH/2});
+  });
+  var sxMin=Math.min.apply(null,corners.map(function(c){return c.x;}));
+  var sxMax=Math.max.apply(null,corners.map(function(c){return c.x;}));
+  var syMin=Math.min.apply(null,corners.map(function(c){return c.y;}));
+  var syMax=Math.max.apply(null,corners.map(function(c){return c.y;}));
+  var sW=sxMax-sxMin, sH=syMax-syMin;
+  ISO_OX = VW/2  - sxMin - sW/2;
+  ISO_OY = (HUD+VH)/2 - syMin - sH/2 - TILE_DEPTH;
 }
 
 // ============================================================
@@ -1499,6 +1623,7 @@ function toggleEditor() {
     ui.classList.add('active');
     ebtn.style.borderColor='#f0c060';
     ebtn.style.color='#f0c060';
+    injectMintButton();
     // Clone current hole grid or make fresh
     if(HOLE&&HOLE.grid){
       EDITOR.grid=HOLE.grid.map(function(r){return r.map(function(c){return{t:c.t};});});
@@ -1775,6 +1900,149 @@ canvas.addEventListener('pointerup',function(e){
   if(!EDITOR.active)return;
   EDITOR.painting=false;
 },{capture:true});
+
+// ============================================================
+// TITLE SCREEN HELPERS
+// ============================================================
+function openBuildMode() {
+  document.getElementById('ov-title').style.display='none';
+  if(!HOLE){ buildHole(0); respawnBall(); }
+  toggleEditor();
+}
+
+function openLoadCode() {
+  document.getElementById('ov-title').style.display='none';
+  var code=window.prompt('Paste hole code:','');
+  if(!code){document.getElementById('ov-title').style.display='flex';return;}
+  var state=codeToHole(code);
+  if(!state){showSpeech('INVALID CODE!');document.getElementById('ov-title').style.display='flex';return;}
+  EDITOR.grid=state.grid; EDITOR.GW=state.GW; EDITOR.GH=state.GH;
+  EDITOR.tee=state.tee; EDITOR.cup=state.cup;
+  EDITOR.obstacles=state.obstacles;
+  EDITOR.pipeIn=state.pipeIn; EDITOR.pipeOut=state.pipeOut;
+  applyEditorToHole();
+  playEditorHole();
+  showSpeech('HOLE LOADED — PLAYING!');
+}
+
+function showHowToPlay() {
+  document.getElementById('ov-title').style.display='none';
+  document.getElementById('ov-howto').style.display='flex';
+}
+
+function startFromHole() {
+  document.getElementById('ov-title').style.display='none';
+  // Build hole select grid
+  var grid=document.getElementById('holeselect-grid');
+  grid.innerHTML='';
+  META.forEach(function(m,i){
+    var btn=document.createElement('button');
+    btn.className='btn bs';
+    btn.style.fontSize='6px';
+    btn.style.padding='10px 6px';
+    btn.innerHTML='<div style="color:#f0c060;margin-bottom:3px">'+(i+1)+'</div>'+
+      '<div style="font-size:5px;color:#c8f0c8">'+m.name+'</div>'+
+      '<div style="font-size:5px;color:#8aaa88">PAR '+m.par+'</div>';
+    btn.onclick=(function(idx){return function(){
+      document.getElementById('ov-holeselect').style.display='none';
+      G.active=true; G.scores=[]; G.totPar=0; G.totStrokes=0;
+      loadHole(idx);
+    };})(i);
+    grid.appendChild(btn);
+  });
+  document.getElementById('ov-holeselect').style.display='flex';
+}
+
+// ============================================================
+// SUPABASE HOLE REGISTRY
+// READS: EDITOR state, Supabase MCP
+// Each hole gets a UUID, stored in 'fundoge_holes' table
+// Schema: id(uuid), name(text), code(text), creator_wallet(text),
+//         plays(int), created_at(timestamp)
+// ============================================================
+var SUPABASE_ENABLED = false; // set true once table exists
+
+function mintHoleLink() {
+  // READS: EDITOR state, SUPABASE_ENABLED
+  // WRITES: Supabase fundoge_holes row, shows share URL
+  if (!EDITOR.grid) { showSpeech('OPEN EDITOR FIRST!'); return; }
+  var code = holeToCode(EDITOR);
+  var holeName = window.prompt('Name your hole:', 'MY HOLE') || 'MY HOLE';
+  var wallet   = window.prompt('Your DOGE wallet (optional, for credit):', '') || '';
+
+  if (!SUPABASE_ENABLED) {
+    // Fallback: just generate a local share code
+    document.getElementById('share-code').value = code;
+    document.getElementById('share-modal').classList.add('open');
+    showSpeech('COPY YOUR HOLE CODE!');
+    return;
+  }
+
+  // When Supabase is live — insert and get UUID back
+  fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      model:'claude-sonnet-4-20250514',
+      max_tokens:500,
+      mcp_servers:[{type:'url',url:'https://mcp.supabase.com/mcp',name:'supabase'}],
+      messages:[{role:'user',content:
+        'Insert into fundoge_holes table: name="'+holeName+'", code="'+code.slice(0,200)+'", '+
+        'creator_wallet="'+wallet+'", plays=0. Return the inserted row id only as JSON {id:"..."}.'
+      }]
+    })
+  })
+  .then(function(r){return r.json();})
+  .then(function(d){
+    var text=d.content.filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+    try {
+      var parsed=JSON.parse(text.match(/\{.*\}/s)[0]);
+      var shareURL='https://dogefundme.com/hole/'+parsed.id;
+      document.getElementById('share-code').value=shareURL+'\n\n'+code;
+      document.getElementById('share-modal').classList.add('open');
+      showSpeech('HOLE MINTED! LINK READY!');
+    } catch(e) {
+      document.getElementById('share-code').value=code;
+      document.getElementById('share-modal').classList.add('open');
+    }
+  })
+  .catch(function(){
+    document.getElementById('share-code').value=code;
+    document.getElementById('share-modal').classList.add('open');
+    showSpeech('COPY YOUR HOLE CODE!');
+  });
+}
+
+function trackHolePlay(holeId) {
+  // Increment play count for a registered hole
+  if (!SUPABASE_ENABLED||!holeId) return;
+  fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      model:'claude-sonnet-4-20250514',
+      max_tokens:100,
+      mcp_servers:[{type:'url',url:'https://mcp.supabase.com/mcp',name:'supabase'}],
+      messages:[{role:'user',content:
+        'Increment plays column by 1 in fundoge_holes where id="'+holeId+'". No output needed.'
+      }]
+    })
+  }).catch(function(){});
+}
+
+// Add Mint Link button to editor actions — injected at runtime
+function injectMintButton() {
+  var actions=document.getElementById('editor-actions');
+  if(!actions||document.getElementById('mint-btn'))return;
+  var btn=document.createElement('button');
+  btn.id='mint-btn';
+  btn.className='btn bp';
+  btn.style.fontSize='7px';
+  btn.style.background='linear-gradient(135deg,#f0c060,#ffea00)';
+  btn.textContent='🔗 MINT LINK';
+  btn.onclick=mintHoleLink;
+  actions.appendChild(btn);
+}
 
 // ============================================================
 // BOOT
