@@ -227,6 +227,8 @@ var ISO_OY = 0;
 
 // w2s and s2w defined in ROTATION SYSTEM below
 function w2tmp(wx,wy){return{x:(wx-wy)*TW/2,y:(wx+wy)*TH/2};}
+
+function setIsoOrigin(hole) {
   // Center the hole grid on screen
   // Find bounding box of all tiles
   var minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
@@ -1253,16 +1255,10 @@ canvas.addEventListener('mousemove',function(e){
   if(G.drag.on){G.drag.cx=p.x;G.drag.cy=p.y;}
 });
 canvas.addEventListener('pointerdown',function(e){
-  e.preventDefault();
-  // Don't fire if any overlay is visible
-  var ovs=['ov-title','ov-pause','ov-hole','ov-score'];
-  for(var i=0;i<ovs.length;i++){
-    var el=document.getElementById(ovs[i]);
-    if(el&&getComputedStyle(el).display!=='none')return;
-  }
   if(!G.active||G.ball.moving||G.holeDone||G.paused)return;
   var p=evPos(e);
   if(p.y<HUD+8)return;
+  e.preventDefault();
   G.drag.on=true; G.drag.sx=p.x; G.drag.sy=p.y; G.drag.cx=p.x; G.drag.cy=p.y;
   G.mouse.x=p.x; G.mouse.y=p.y;
   setHint('RELEASE TO SHOOT');
