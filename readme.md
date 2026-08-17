@@ -202,7 +202,7 @@ Zero npm. Zero build step. Zero server. Open the HTML file locally and it works.
 
 ## Code standards
 
-All JavaScript in this project follows the Zengine coding standard:
+All JavaScript in this project follows the F-Keys coding standard:
 
 - `var` only — no `let` or `const`
 - Regular `function` declarations — no arrow functions
@@ -267,7 +267,7 @@ The guest book operates on an honor system with no IP enforcement in v1. One sig
 
 ## Contact
 
-Built by Vincent Gonzalez — [Zengine™](https://zengine.site)
+Built by Vincent Gonzalez — [F-Keys](https://f-keys.com)
 
 Site: [dogefundme.com](https://dogefundme.com)
 
@@ -275,4 +275,4 @@ Wallet: `DU64oNpbRNRCEZdRWN1STN2KWsj7W3Ar4U`
 
 ---
 
-*© 2026 Zengine™ — www.zengine.site*
+*© 2026 F-Keys — www.f-keys.com*
